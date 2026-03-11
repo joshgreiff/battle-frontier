@@ -5,6 +5,7 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 model User {
@@ -30,6 +31,7 @@ model Group {
   createdAt     DateTime      @default(now())
   owner         User          @relation("GroupOwner", fields: [ownerId], references: [id])
   members       GroupMember[]
+  decks         GroupDeck[]
   matches       Match[]
   tcgLiveImports TcgLiveImport[]
   metaScenarios MetaScenario[]
@@ -56,6 +58,21 @@ model Archetype {
   iconUrl     String?
   createdAt   DateTime @default(now())
   metaEntries MetaShareEntry[]
+}
+
+model GroupDeck {
+  id          String   @id @default(cuid())
+  groupId     String
+  formatCode  String   @default("SVI-ASC")
+  key         String
+  pokemon1    String
+  pokemon2    String?
+  nickname    String?
+  displayName String
+  createdAt   DateTime @default(now())
+  group       Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, key])
 }
 
 model Match {

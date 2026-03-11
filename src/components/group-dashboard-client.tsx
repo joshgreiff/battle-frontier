@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Image from "next/image";
 import { buildMatchupCells } from "@/lib/analytics/matchup";
 import { recommendDecks } from "@/lib/analytics/recommendation";
 import FormatSelect from "@/components/format-select";
 import { formatOptions } from "@/lib/formats";
+import { getArchetypeIconIds, getPokemonIconUrl } from "@/lib/deck-icons";
 
 type GameType =
   | "in_person_testing"
@@ -14,6 +16,8 @@ type GameType =
   | "international"
   | "tcg_live_ladder"
   | "other";
+
+type LogEntryMode = "manual" | "tcg_live";
 
 type LoggedGame = {
   id: string;
@@ -52,14 +56,16 @@ type ImportHistoryItem = {
   loggedBy: string;
 };
 
-const defaultDecks = [
-  "Dragapult / Dusknoir",
-  "Gardevoir",
-  "Gardevoir / Jellicent",
-  "Charizard / Pidgeot",
-  "Charizard / Noctowl",
-  "Other"
-];
+type SavedDeck = {
+  id: string;
+  key: string;
+  formatCode: string;
+  pokemon1: string;
+  pokemon2?: string | null;
+  nickname?: string | null;
+  displayName: string;
+};
+
 const gameTypes: Array<{ value: GameType; label: string }> = [
   { value: "in_person_testing", label: "In Person Testing" },
   { value: "cup", label: "Cup" },
@@ -72,6 +78,35 @@ const gameTypes: Array<{ value: GameType; label: string }> = [
 
 function pct(value: number): string {
   return `${(value * 100).toFixed(1)}%`;
+}
+
+async function parseErrorResponse(res: Response, fallback: string): Promise<string> {
+  try {
+    const data = (await res.json()) as { error?: string; details?: string };
+    if (data.error) return data.error;
+    if (data.details) return data.details;
+  } catch {
+    // Ignore parse failures and fall back to generic text.
+  }
+  return fallback;
+}
+
+function ArchetypeIcons({ archetype }: { archetype: string }) {
+  const ids = getArchetypeIconIds(archetype);
+  return (
+    <span className="deckIcons" aria-label={archetype}>
+      {ids.map((id) => (
+          <Image
+            className={id === "substitute" ? "deckIcon deckIconSubstitute" : "deckIcon"}
+            src={getPokemonIconUrl(id)}
+            alt={id}
+            width={id === "substitute" ? 30 : 22}
+            height={id === "substitute" ? 30 : 22}
+            key={`${archetype}-${id}`}
+          />
+      ))}
+    </span>
+  );
 }
 
 export default function GroupDashboardClient({
@@ -88,12 +123,17 @@ export default function GroupDashboardClient({
   memberNames: string[];
 }) {
   const [games, setGames] = useState<LoggedGame[]>([]);
+  const [savedDecks, setSavedDecks] = useState<SavedDeck[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [activeTab, setActiveTab] = useState<"logs" | "stats" | "decks">("logs");
+  const [logEntryMode, setLogEntryMode] = useState<LogEntryMode>("manual");
   const [selectedFormatId, setSelectedFormatId] = useState("SVI-ASC");
-  const [deckOptions, setDeckOptions] = useState<string[]>(defaultDecks);
-  const [newDeckName, setNewDeckName] = useState("");
+  const [newDeckPokemon1, setNewDeckPokemon1] = useState("");
+  const [newDeckPokemon2, setNewDeckPokemon2] = useState("");
+  const [newDeckNickname, setNewDeckNickname] = useState("");
+  const [pokemonSuggestionsA, setPokemonSuggestionsA] = useState<string[]>([]);
+  const [pokemonSuggestionsB, setPokemonSuggestionsB] = useState<string[]>([]);
   const playerList = useMemo(() => {
     const fromGroup = memberNames.filter(Boolean);
     const base = fromGroup.length > 0 ? fromGroup : [userName];
@@ -102,20 +142,48 @@ export default function GroupDashboardClient({
   const [form, setForm] = useState({
     playerAName: playerList[0] ?? userName,
     playerBName: playerList[1] ?? playerList[0] ?? userName,
-    archetypeA: "Charizard / Pidgeot",
-    archetypeB: "Dragapult / Dusknoir",
+    archetypeA: "Other",
+    archetypeB: "Other",
     winnerSide: "A" as "A" | "B",
     formatCode: "SVI-ASC",
     gameType: "in_person_testing" as GameType,
     notes: ""
   });
   const [liveLogText, setLiveLogText] = useState("");
+  const [importFormatCode, setImportFormatCode] = useState("SVI-ASC");
+  const [importFallbackDeckA, setImportFallbackDeckA] = useState("Other");
+  const [importFallbackDeckB, setImportFallbackDeckB] = useState("Other");
   const [parsedImportRows, setParsedImportRows] = useState<ParsedImportRow[]>([]);
   const [failedImportRows, setFailedImportRows] = useState<FailedImportRow[]>([]);
   const [importLoading, setImportLoading] = useState(false);
   const [lastSavedImportId, setLastSavedImportId] = useState<string | null>(null);
   const [importHistory, setImportHistory] = useState<ImportHistoryItem[]>([]);
   const [parseMessage, setParseMessage] = useState("");
+
+  const deckOptions = useMemo(() => {
+    const seen = new Set<string>();
+    const combined = ["Other", ...savedDecks.map((d) => d.displayName)].filter((d) => {
+      const normalized = d.trim().toLowerCase();
+      if (!normalized || seen.has(normalized)) return false;
+      seen.add(normalized);
+      return true;
+    });
+    return combined;
+  }, [savedDecks]);
+
+  const savedDeckByName = useMemo(() => {
+    const byName = new Map<string, SavedDeck>();
+    for (const deck of savedDecks) {
+      byName.set(deck.displayName, deck);
+    }
+    return byName;
+  }, [savedDecks]);
+
+  function deckOptionLabel(displayName: string): string {
+    const saved = savedDeckByName.get(displayName);
+    if (!saved?.nickname?.trim()) return displayName;
+    return `${displayName} (${saved.nickname.trim()})`;
+  }
 
   useEffect(() => {
     async function loadMatches() {
@@ -142,6 +210,76 @@ export default function GroupDashboardClient({
     }
     loadImportHistory();
   }, [groupId]);
+
+  useEffect(() => {
+    async function loadDecks() {
+      const res = await fetch(
+        `/api/decks?groupId=${groupId}&formatCode=${encodeURIComponent(selectedFormatId)}`
+      );
+      if (!res.ok) return;
+      setSavedDecks((await res.json()) as SavedDeck[]);
+    }
+    loadDecks();
+  }, [groupId, selectedFormatId]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      const query = newDeckPokemon1.trim();
+      if (!query) {
+        setPokemonSuggestionsA([]);
+        return;
+      }
+      try {
+        const res = await fetch(`/api/pokemon/search?q=${encodeURIComponent(query)}&limit=25`, {
+          signal: controller.signal
+        });
+        if (!res.ok) return;
+        const data = (await res.json()) as { results?: string[] };
+        setPokemonSuggestionsA(data.results ?? []);
+      } catch {
+        // Ignore aborted and transient network errors.
+      }
+    }, 220);
+
+    return () => {
+      controller.abort();
+      clearTimeout(timer);
+    };
+  }, [newDeckPokemon1]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      const query = newDeckPokemon2.trim();
+      if (!query) {
+        setPokemonSuggestionsB([]);
+        return;
+      }
+      try {
+        const res = await fetch(`/api/pokemon/search?q=${encodeURIComponent(query)}&limit=25`, {
+          signal: controller.signal
+        });
+        if (!res.ok) return;
+        const data = (await res.json()) as { results?: string[] };
+        setPokemonSuggestionsB(data.results ?? []);
+      } catch {
+        // Ignore aborted and transient network errors.
+      }
+    }, 220);
+
+    return () => {
+      controller.abort();
+      clearTimeout(timer);
+    };
+  }, [newDeckPokemon2]);
+
+  const resolvedImportFallbackDeckA = deckOptions.includes(importFallbackDeckA)
+    ? importFallbackDeckA
+    : (deckOptions[0] ?? "Other");
+  const resolvedImportFallbackDeckB = deckOptions.includes(importFallbackDeckB)
+    ? importFallbackDeckB
+    : (deckOptions[0] ?? "Other");
 
   const filteredGames = games;
   const decksInUse = useMemo(() => {
@@ -219,6 +357,7 @@ export default function GroupDashboardClient({
 
   async function onSubmitGame(event: React.FormEvent) {
     event.preventDefault();
+    setError("");
     const res = await fetch("/api/matches", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -236,7 +375,7 @@ export default function GroupDashboardClient({
       })
     });
     if (!res.ok) {
-      setError("Unable to save log.");
+      setError(await parseErrorResponse(res, "Unable to save manual log."));
       return;
     }
     const created = (await res.json()) as LoggedGame;
@@ -258,7 +397,7 @@ export default function GroupDashboardClient({
     });
     if (!res.ok) {
       setImportLoading(false);
-      setError("Unable to parse TCG Live logs.");
+      setError(await parseErrorResponse(res, "Unable to parse TCG Live logs."));
       return;
     }
     const data = (await res.json()) as {
@@ -294,17 +433,17 @@ export default function GroupDashboardClient({
           source: "import",
           playerAName: row.playerA,
           playerBName: row.playerB,
-          archetypeA: row.archetypeA || form.archetypeA,
-          archetypeB: row.archetypeB || form.archetypeB,
+          archetypeA: row.archetypeA || resolvedImportFallbackDeckA,
+          archetypeB: row.archetypeB || resolvedImportFallbackDeckB,
           winnerSide,
-          formatCode: row.formatCode || form.formatCode,
+          formatCode: row.formatCode || importFormatCode,
           gameType: "tcg_live_ladder",
           notes: form.notes || undefined
         })
       });
       if (!res.ok) {
         setImportLoading(false);
-        setError("Some logs failed to import. Check row formatting.");
+        setError(await parseErrorResponse(res, "Some logs failed to import. Check row formatting."));
         return;
       }
       createdRows.push((await res.json()) as LoggedGame);
@@ -371,20 +510,69 @@ export default function GroupDashboardClient({
       .sort((a, b) => b.total - a.total);
   }, [filteredGames]);
 
-  function addDeckOption() {
-    const next = newDeckName.trim();
-    if (!next) return;
-    if (deckOptions.some((d) => d.toLowerCase() === next.toLowerCase())) {
-      setNewDeckName("");
-      return;
-    }
-    setDeckOptions((current) => [...current, next]);
-    setNewDeckName("");
+  function normalizePokemonInput(value: string): string {
+    const trimmed = value.trim();
+    if (!trimmed) return "";
+    return `${trimmed[0].toUpperCase()}${trimmed.slice(1).toLowerCase()}`;
   }
 
-  function removeDeckOption(deck: string) {
+  function toDeckDisplayName(pokemon1: string, pokemon2?: string): string {
+    return pokemon2 ? `${pokemon1} / ${pokemon2}` : pokemon1;
+  }
+
+  async function addDeckOption() {
+    const pokemon1 = normalizePokemonInput(newDeckPokemon1);
+    const pokemon2 = normalizePokemonInput(newDeckPokemon2);
+    if (!pokemon1) {
+      setError("Choose at least one Pokemon.");
+      return;
+    }
+    setError("");
+    const res = await fetch("/api/decks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        groupId,
+        formatCode: selectedFormatId,
+        pokemon1,
+        pokemon2: pokemon2 || undefined,
+        nickname: newDeckNickname || undefined
+      })
+    });
+    if (!res.ok) {
+      setError(await parseErrorResponse(res, "Unable to save deck."));
+      return;
+    }
+    const created = (await res.json()) as SavedDeck;
+    setSavedDecks((current) => {
+      if (current.some((d) => d.key === created.key)) return current;
+      return [...current, created];
+    });
+    const displayName = toDeckDisplayName(pokemon1, pokemon2 || undefined);
+    setForm((current) => ({
+      ...current,
+      archetypeA: current.archetypeA === "Other" ? displayName : current.archetypeA,
+      archetypeB: current.archetypeB === "Other" ? displayName : current.archetypeB
+    }));
+    setNewDeckPokemon1("");
+    setNewDeckPokemon2("");
+    setNewDeckNickname("");
+  }
+
+  async function removeDeckOption(deck: string) {
     if (deck === "Other") return;
-    setDeckOptions((current) => current.filter((d) => d !== deck));
+    const saved = savedDecks.find((d) => d.displayName === deck);
+    if (!saved) return;
+    const res = await fetch("/api/decks", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ groupId, id: saved.id })
+    });
+    if (!res.ok) {
+      setError(await parseErrorResponse(res, "Unable to remove deck."));
+      return;
+    }
+    setSavedDecks((current) => current.filter((d) => d.key !== saved.key));
     setForm((current) => ({
       ...current,
       archetypeA: current.archetypeA === deck ? "Other" : current.archetypeA,
@@ -439,6 +627,32 @@ export default function GroupDashboardClient({
 
         {activeTab === "logs" ? (
           <article className="panel">
+            <h2 className="panelTitle">Log Entry Mode</h2>
+            <div className="inlineActions">
+              <button
+                className={logEntryMode === "manual" ? "actionBtn" : "secondaryBtn"}
+                type="button"
+                onClick={() => setLogEntryMode("manual")}
+              >
+                Manual Entry
+              </button>
+              <button
+                className={logEntryMode === "tcg_live" ? "actionBtn" : "secondaryBtn"}
+                type="button"
+                onClick={() => setLogEntryMode("tcg_live")}
+              >
+                TCG Live Import
+              </button>
+            </div>
+            <p className="mutedText">
+              If you are pasting a TCG Live log, use <strong>TCG Live Import</strong>. You do not
+              need to fill the manual form.
+            </p>
+          </article>
+        ) : null}
+
+        {activeTab === "logs" && logEntryMode === "manual" ? (
+          <article className="panel">
             <form className="gridForm" onSubmit={onSubmitGame}>
               <label>
                 Logged by
@@ -471,7 +685,9 @@ export default function GroupDashboardClient({
                   }
                 >
                   {deckOptions.map((d) => (
-                    <option key={d}>{d}</option>
+                    <option key={d} value={d}>
+                      {deckOptionLabel(d)}
+                    </option>
                   ))}
                 </select>
               </label>
@@ -497,7 +713,9 @@ export default function GroupDashboardClient({
                   }
                 >
                   {deckOptions.map((d) => (
-                    <option key={d}>{d}</option>
+                    <option key={d} value={d}>
+                      {deckOptionLabel(d)}
+                    </option>
                   ))}
                 </select>
               </label>
@@ -551,13 +769,53 @@ export default function GroupDashboardClient({
           </article>
         ) : null}
 
-        {activeTab === "logs" && form.gameType === "tcg_live_ladder" ? (
+        {activeTab === "logs" && logEntryMode === "tcg_live" ? (
           <article className="panel">
             <h2 className="panelTitle">TCG Live Paste Import</h2>
+            <p className="mutedText">
+              Paste the full raw TCG Live match log below. We will try to auto-detect players,
+              winner, and archetypes.
+            </p>
+            <div className="gridForm">
+              <label>
+                Fallback Format
+                <FormatSelect
+                  value={importFormatCode}
+                  options={formatOptions}
+                  onChange={setImportFormatCode}
+                />
+              </label>
+              <label>
+                Fallback Deck A
+                <select
+                  value={resolvedImportFallbackDeckA}
+                  onChange={(e) => setImportFallbackDeckA(e.target.value)}
+                >
+                  {deckOptions.map((d) => (
+                    <option key={d} value={d}>
+                      {deckOptionLabel(d)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Fallback Deck B
+                <select
+                  value={resolvedImportFallbackDeckB}
+                  onChange={(e) => setImportFallbackDeckB(e.target.value)}
+                >
+                  {deckOptions.map((d) => (
+                    <option key={d} value={d}>
+                      {deckOptionLabel(d)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
             <textarea
               value={liveLogText}
               onChange={(e) => setLiveLogText(e.target.value)}
-              placeholder="Paste one per line: PlayerA vs PlayerB - winner: PlayerA"
+              placeholder="Paste the full TCG Live log text (Setup... turns... winner...)"
             />
             <div className="inlineActions">
               <button className="actionBtn" type="button" onClick={parseLiveLogs} disabled={importLoading}>
@@ -568,7 +826,7 @@ export default function GroupDashboardClient({
               </button>
             </div>
             <p className="mutedText">
-              Optional detailed row format:
+              Optional line-by-line format also supported:
               {" "}
               <code>
                 A vs B - winner: A - decks: Deck1 vs Deck2 - format: SVI-ASC
@@ -581,7 +839,7 @@ export default function GroupDashboardClient({
                     <span>
                       {row.playerA} vs {row.playerB} ({row.winner})
                     </span>
-                    <strong>{row.formatCode || form.formatCode}</strong>
+                    <strong>{row.formatCode || importFormatCode}</strong>
                   </li>
                 ))}
               </ul>
@@ -654,7 +912,10 @@ export default function GroupDashboardClient({
                 {deckRows.map((row) => (
                   <li key={row.deck} className="row">
                     <div>
-                      <strong>{row.deck}</strong>
+                      <strong className="deckLabel">
+                        <ArchetypeIcons archetype={row.deck} />
+                        {row.deck}
+                      </strong>
                       <p className="mutedText">{row.total} total</p>
                     </div>
                     <p className="score">
@@ -702,7 +963,8 @@ export default function GroupDashboardClient({
               <ul className="rows">
                 {matchupCells.map((cell) => (
                   <li key={`${cell.deckId}-${cell.oppId}`} className="row">
-                    <span>
+                    <span className="deckLabel">
+                      <ArchetypeIcons archetype={cell.deckId} />
                       {cell.deckId} vs {cell.oppId}
                     </span>
                     <strong>
@@ -718,7 +980,10 @@ export default function GroupDashboardClient({
               <div className="shareGrid">
                 {decksInUse.map((deck) => (
                   <label key={deck}>
-                    {deck}
+                    <span className="deckLabel">
+                      <ArchetypeIcons archetype={deck} />
+                      {deck}
+                    </span>
                     <input
                       type="number"
                       min={0}
@@ -737,7 +1002,10 @@ export default function GroupDashboardClient({
               <ul className="rows">
                 {recommendations.map((entry) => (
                   <li key={entry.archetypeId} className="row">
-                    <span>{entry.archetypeId}</span>
+                    <span className="deckLabel">
+                      <ArchetypeIcons archetype={entry.archetypeId} />
+                      {entry.archetypeId}
+                    </span>
                     <strong>{pct(entry.expectedWinRate)}</strong>
                   </li>
                 ))}
@@ -747,24 +1015,70 @@ export default function GroupDashboardClient({
         ) : (
           <article className="panel">
             <h2 className="panelTitle">Manage Group Decks</h2>
+            <div className="gridForm">
+              <label>
+                Deck format
+                <FormatSelect
+                  value={selectedFormatId}
+                  options={formatOptions}
+                  onChange={onChangeFormat}
+                />
+              </label>
+            </div>
+            <div className="gridForm">
+              <label>
+                Pokemon 1
+                <input
+                  list="pokemon-options-a"
+                  value={newDeckPokemon1}
+                  placeholder="Start typing (e.g. Gardevoir)"
+                  onChange={(e) => setNewDeckPokemon1(e.target.value)}
+                />
+              </label>
+              <label>
+                Pokemon 2 (optional)
+                <input
+                  list="pokemon-options-b"
+                  value={newDeckPokemon2}
+                  placeholder="Optional second Pokemon"
+                  onChange={(e) => setNewDeckPokemon2(e.target.value)}
+                />
+              </label>
+              <label>
+                Deck nickname (optional)
+                <input
+                  value={newDeckNickname}
+                  placeholder="e.g. Tera Box, LAIC list"
+                  onChange={(e) => setNewDeckNickname(e.target.value)}
+                />
+              </label>
+            </div>
             <div className="inlineActions">
-              <input
-                value={newDeckName}
-                placeholder="Add deck archetype"
-                onChange={(e) => setNewDeckName(e.target.value)}
-              />
               <button className="actionBtn" type="button" onClick={addDeckOption}>
-                Add Deck
+                Save Deck Archetype
               </button>
             </div>
+            <datalist id="pokemon-options-a">
+              {pokemonSuggestionsA.map((name) => (
+                <option key={name} value={name} />
+              ))}
+            </datalist>
+            <datalist id="pokemon-options-b">
+              {pokemonSuggestionsB.map((name) => (
+                <option key={name} value={name} />
+              ))}
+            </datalist>
             <ul className="rows">
               {deckOptions.map((deck) => (
                 <li className="row" key={deck}>
-                  <span>{deck}</span>
+                  <span className="deckLabel">
+                    <ArchetypeIcons archetype={deck} />
+                    {deckOptionLabel(deck)}
+                  </span>
                   <button
                     className="dangerBtn"
                     type="button"
-                    disabled={deck === "Other"}
+                    disabled={deck === "Other" || !savedDecks.some((d) => d.displayName === deck)}
                     onClick={() => removeDeckOption(deck)}
                   >
                     Remove
@@ -773,7 +1087,8 @@ export default function GroupDashboardClient({
               ))}
             </ul>
             <p className="mutedText">
-              `Other` stays available so unusual lists are always trackable.
+              Decks are saved per format so you can keep old rotation data. `Other` stays available
+              with a Substitute icon.
             </p>
           </article>
         )}

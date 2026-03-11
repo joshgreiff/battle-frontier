@@ -183,6 +183,31 @@ h2 {
   font-size: 0.9rem;
 }
 
+.deckLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.deckIcons {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  min-width: 2.5rem;
+}
+
+.deckIcon {
+  width: 22px;
+  height: 22px;
+  image-rendering: pixelated;
+  filter: drop-shadow(0 1px 1px rgba(5, 12, 26, 0.25));
+}
+
+.deckIconSubstitute {
+  width: 30px;
+  height: 30px;
+}
+
 .panel {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -287,6 +312,13 @@ textarea {
 .actionBtn:hover {
   filter: brightness(1.06);
   transform: translateY(-1px);
+}
+
+.secondaryBtn {
+  max-width: 160px;
+  border-color: var(--border-strong);
+  background: var(--surface-soft);
+  color: var(--text);
 }
 
 .inlineActions {

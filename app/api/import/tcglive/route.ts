@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
+import { Prisma } from "@prisma/client";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
@@ -197,57 +198,80 @@ function parseLogText(logText: string): {
 }
 
 export async function POST(req: Request) {
-  const body = (await req.json()) as {
-    logText?: string;
-    groupId?: string;
-    persist?: boolean;
-  };
-  if (!body.logText) {
-    return NextResponse.json({ error: "logText is required" }, { status: 400 });
-  }
-
-  const parsedResult = parseLogText(body.logText);
-
-  let savedImportId: string | null = null;
-  if (body.persist && body.groupId) {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  try {
+    const body = (await req.json()) as {
+      logText?: string;
+      groupId?: string;
+      persist?: boolean;
+    };
+    if (!body.logText) {
+      return NextResponse.json({ error: "logText is required" }, { status: 400 });
     }
-    const membership = await prisma.groupMember.findUnique({
-      where: {
-        groupId_userId: { groupId: body.groupId, userId: session.user.id }
+
+    const parsedResult = parseLogText(body.logText);
+
+    let savedImportId: string | null = null;
+    if (body.persist && body.groupId) {
+      const session = await getServerSession(authOptions);
+      if (!session?.user?.id) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
       }
-    });
-    if (!membership) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      const membership = await prisma.groupMember.findUnique({
+        where: {
+          groupId_userId: { groupId: body.groupId, userId: session.user.id }
+        }
+      });
+      if (!membership) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
+
+      try {
+        const saved = await prisma.tcgLiveImport.create({
+          data: {
+            groupId: body.groupId,
+            loggedByUserId: session.user.id,
+            rawText: body.logText,
+            totalLines: parsedResult.totalLines,
+            parsedLines: parsedResult.rows.length,
+            parsedRows: parsedResult.rows,
+            failedRows: parsedResult.failedRows
+          },
+          select: { id: true }
+        });
+        savedImportId = saved.id;
+      } catch (error) {
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2021") {
+          return NextResponse.json(
+            {
+              error:
+                "TCG Live import table is missing in this database. Run `npm run db:push` and retry."
+            },
+            { status: 500 }
+          );
+        }
+        throw error;
+      }
     }
 
-    const saved = await prisma.tcgLiveImport.create({
-      data: {
-        groupId: body.groupId,
-        loggedByUserId: session.user.id,
-        rawText: body.logText,
-        totalLines: parsedResult.totalLines,
-        parsedLines: parsedResult.rows.length,
-        parsedRows: parsedResult.rows,
-        failedRows: parsedResult.failedRows
-      },
-      select: { id: true }
+    return NextResponse.json({
+      totalLines: parsedResult.totalLines,
+      parsedLines: parsedResult.rows.length,
+      failedLines: parsedResult.failedRows.length,
+      rows: parsedResult.rows,
+      failedRows: parsedResult.failedRows,
+      parseMessage:
+        parsedResult.rows.length > 0
+          ? `Parsed ${parsedResult.rows.length} row(s). ${parsedResult.failedRows.length} failed.`
+          : "No valid rows parsed. Check the expected line format.",
+      savedImportId
     });
-    savedImportId = saved.id;
+  } catch (error) {
+    console.error("TCG Live import route failure:", error);
+    return NextResponse.json(
+      {
+        error: "TCG Live import failed on server. Verify DATABASE_URL and run `npm run db:push`."
+      },
+      { status: 500 }
+    );
   }
-
-  return NextResponse.json({
-    totalLines: parsedResult.totalLines,
-    parsedLines: parsedResult.rows.length,
-    failedLines: parsedResult.failedRows.length,
-    rows: parsedResult.rows,
-    failedRows: parsedResult.failedRows,
-    parseMessage:
-      parsedResult.rows.length > 0
-        ? `Parsed ${parsedResult.rows.length} row(s). ${parsedResult.failedRows.length} failed.`
-        : "No valid rows parsed. Check the expected line format.",
-    savedImportId
-  });
 }
