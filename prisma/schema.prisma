@@ -16,6 +16,7 @@ model User {
   ownedGroups  Group[]       @relation("GroupOwner")
   memberships  GroupMember[]
   loggedMatches Match[]      @relation("MatchLoggedBy")
+  tcgLiveImports TcgLiveImport[]
   scenarios    MetaScenario[]
 }
 
@@ -30,6 +31,7 @@ model Group {
   owner         User          @relation("GroupOwner", fields: [ownerId], references: [id])
   members       GroupMember[]
   matches       Match[]
+  tcgLiveImports TcgLiveImport[]
   metaScenarios MetaScenario[]
 }
 
@@ -74,6 +76,20 @@ model Match {
   createdAt      DateTime @default(now())
   group          Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
   loggedBy       User     @relation("MatchLoggedBy", fields: [loggedByUserId], references: [id], onDelete: Cascade)
+}
+
+model TcgLiveImport {
+  id             String   @id @default(cuid())
+  groupId        String
+  loggedByUserId String
+  rawText        String
+  totalLines     Int
+  parsedLines    Int
+  parsedRows     Json
+  failedRows     Json?
+  createdAt      DateTime @default(now())
+  group          Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  loggedBy       User     @relation(fields: [loggedByUserId], references: [id], onDelete: Cascade)
 }
 
 model MetaScenario {

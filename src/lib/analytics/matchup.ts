@@ -9,6 +9,7 @@ export type MatchupCell = {
   oppId: string;
   games: number;
   wins: number;
+  rawWinRate: number;
   smoothedWinRate: number;
 };
 
@@ -43,6 +44,7 @@ export function buildMatchupCells(matches: MatchRow[]): MatchupCell[] {
   const cells: MatchupCell[] = [];
   for (const [key, value] of stats) {
     const [deckId, oppId] = key.split("::");
+    const rawWinRate = value.games > 0 ? value.winsForFirst / value.games : 0;
     const smoothedWinRate = (value.winsForFirst + 1) / (value.games + 2);
 
     cells.push({
@@ -50,6 +52,7 @@ export function buildMatchupCells(matches: MatchRow[]): MatchupCell[] {
       oppId,
       games: value.games,
       wins: value.winsForFirst,
+      rawWinRate,
       smoothedWinRate
     });
   }

@@ -1,25 +1,33 @@
 :root {
-  --bg: #f6f7fb;
-  --text: #121826;
+  --bg: #eef5fb;
+  --text: #1f2937;
   --surface: #ffffff;
-  --surface-soft: #f9fbff;
-  --border: #e4e7ee;
-  --border-strong: #d4d9e5;
-  --muted: #5d667a;
-  --muted-2: #6a738a;
-  --primary: #1f3f9b;
+  --surface-soft: #f7fbff;
+  --border: #d7e3ef;
+  --border-strong: #bfd3e4;
+  --muted: #4b677f;
+  --muted-2: #627b90;
+  --primary: #3e7fae;
+  --frontier-ocean: #77b7e5;
+  --frontier-forest: #4e8a5d;
+  --frontier-sand: #cfa86c;
+  --frontier-accent: #e27a3f;
 }
 
 [data-theme="dark"] {
-  --bg: #0d1220;
+  --bg: #0f1b2a;
   --text: #e8edf9;
-  --surface: #121a2b;
-  --surface-soft: #172237;
-  --border: #2a3552;
-  --border-strong: #334264;
-  --muted: #aeb8d1;
-  --muted-2: #9aa6c5;
-  --primary: #4d78ff;
+  --surface: #142233;
+  --surface-soft: #1a2b40;
+  --border: #27415b;
+  --border-strong: #32557b;
+  --muted: #a7bfd5;
+  --muted-2: #90acc9;
+  --primary: #5ea0d2;
+  --frontier-ocean: #5ea0d2;
+  --frontier-forest: #6aa479;
+  --frontier-sand: #c7a26d;
+  --frontier-accent: #e58d58;
 }
 
 * {
@@ -31,6 +39,10 @@ body {
   font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
   background: var(--bg);
   color: var(--text);
+  background-image:
+    radial-gradient(circle at 18% 8%, color-mix(in srgb, var(--frontier-ocean) 18%, transparent) 0, transparent 30%),
+    radial-gradient(circle at 82% 14%, color-mix(in srgb, var(--frontier-forest) 12%, transparent) 0, transparent 26%),
+    radial-gradient(circle at 74% 92%, color-mix(in srgb, var(--frontier-sand) 14%, transparent) 0, transparent 28%);
 }
 
 a {
@@ -73,7 +85,15 @@ h2 {
 
 .heroCard {
   border-color: var(--border-strong);
-  background: linear-gradient(180deg, var(--surface), var(--surface-soft));
+  background:
+    linear-gradient(180deg, var(--surface), var(--surface-soft)),
+    repeating-linear-gradient(
+      120deg,
+      color-mix(in srgb, var(--frontier-ocean) 8%, transparent) 0px,
+      color-mix(in srgb, var(--frontier-ocean) 8%, transparent) 8px,
+      transparent 8px,
+      transparent 16px
+    );
 }
 
 .muted {
@@ -102,11 +122,17 @@ h2 {
   border-right: 1px solid var(--border);
   padding: 1rem 0.8rem;
   background: var(--surface);
+  background-image: linear-gradient(
+    170deg,
+    color-mix(in srgb, var(--frontier-forest) 12%, transparent),
+    transparent 55%
+  );
 }
 
 .brand {
   font-size: 1.1rem;
   margin: 0;
+  letter-spacing: 0.01em;
 }
 
 .groupRef {
@@ -125,12 +151,17 @@ h2 {
   color: var(--text);
   font-weight: 500;
   margin-bottom: 0.35rem;
+  transition: all 140ms ease;
 }
 
 .navBtn.active {
   border-color: var(--border-strong);
   background: color-mix(in srgb, var(--primary) 15%, transparent);
   color: var(--primary);
+}
+
+.navBtn:hover {
+  border-color: var(--border-strong);
 }
 
 .contentPane {
@@ -158,12 +189,14 @@ h2 {
   border-radius: 12px;
   padding: 0.9rem;
   margin-bottom: 0.9rem;
+  box-shadow: 0 8px 22px rgba(29, 61, 89, 0.06);
 }
 
 .panelTitle {
   margin: 0 0 0.65rem;
   font-size: 1rem;
   font-weight: 700;
+  color: color-mix(in srgb, var(--text) 92%, var(--frontier-ocean));
 }
 
 .gridForm {
@@ -248,6 +281,32 @@ textarea {
   border-color: var(--primary);
   background: var(--primary);
   color: white;
+  transition: transform 140ms ease, filter 140ms ease;
+}
+
+.actionBtn:hover {
+  filter: brightness(1.06);
+  transform: translateY(-1px);
+}
+
+.inlineActions {
+  display: flex;
+  gap: 0.6rem;
+  margin-top: 0.55rem;
+  margin-bottom: 0.55rem;
+}
+
+.dangerBtn {
+  width: auto;
+  border: 1px solid #d15c5c;
+  color: #fff;
+  background: #c74343;
+  padding: 0.35rem 0.65rem;
+}
+
+.dangerBtn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .formatSelect {
@@ -311,6 +370,16 @@ input[readOnly] {
 .siteFooter {
   border-top: 1px solid var(--border);
   background: var(--surface);
+}
+
+.routeHint {
+  font-size: 0.78rem;
+  color: var(--muted-2);
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  width: fit-content;
+  padding: 0.2rem 0.55rem;
+  background: color-mix(in srgb, var(--frontier-sand) 18%, transparent);
 }
 
 .themeToggle {

@@ -17,7 +17,19 @@ export default async function GroupDashboardPage({ params }: GroupPageProps) {
 
   const membership = await prisma.groupMember.findUnique({
     where: { groupId_userId: { groupId, userId: session.user.id } },
-    include: { group: { select: { name: true, inviteCode: true } } }
+    include: {
+      group: {
+        select: {
+          name: true,
+          inviteCode: true,
+          members: {
+            include: {
+              user: { select: { displayName: true, email: true } }
+            }
+          }
+        }
+      }
+    }
   });
   if (!membership) {
     redirect("/");
@@ -29,6 +41,9 @@ export default async function GroupDashboardPage({ params }: GroupPageProps) {
       groupName={membership.group.name}
       inviteCode={membership.group.inviteCode}
       userName={session.user.name ?? session.user.email ?? "Member"}
+      memberNames={membership.group.members.map(
+        (m) => m.user.displayName?.trim() || m.user.email
+      )}
     />
   );
 }

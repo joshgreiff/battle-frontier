@@ -93,6 +93,7 @@ export default function HomeLauncher({
           Welcome back {userName}. Create a testing group or join instantly via
           group search.
         </p>
+        <p className="routeHint">Adventure Mode: Regional Prep</p>
         <button className="primaryAction" onClick={() => signOut({ callbackUrl: "/" })}>
           Sign Out
         </button>
