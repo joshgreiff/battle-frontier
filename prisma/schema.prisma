@@ -1,0 +1,99 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String        @id @default(cuid())
+  email        String        @unique
+  passwordHash String
+  displayName  String?
+  createdAt    DateTime      @default(now())
+  ownedGroups  Group[]       @relation("GroupOwner")
+  memberships  GroupMember[]
+  loggedMatches Match[]      @relation("MatchLoggedBy")
+  scenarios    MetaScenario[]
+}
+
+model Group {
+  id            String        @id @default(cuid())
+  name          String
+  inviteCode    String        @unique
+  passwordHash  String
+  ownerId       String
+  isPrivate     Boolean       @default(true)
+  createdAt     DateTime      @default(now())
+  owner         User          @relation("GroupOwner", fields: [ownerId], references: [id])
+  members       GroupMember[]
+  matches       Match[]
+  metaScenarios MetaScenario[]
+}
+
+model GroupMember {
+  id        String   @id @default(cuid())
+  groupId   String
+  userId    String
+  role      String   @default("member")
+  joinedAt  DateTime @default(now())
+  group     Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, userId])
+}
+
+model Archetype {
+  id          String  @id @default(cuid())
+  key         String  @unique
+  pokemon1    String
+  pokemon2    String?
+  displayName String
+  iconUrl     String?
+  createdAt   DateTime @default(now())
+  metaEntries MetaShareEntry[]
+}
+
+model Match {
+  id             String   @id @default(cuid())
+  groupId        String
+  playedAt       DateTime @default(now())
+  source         String
+  loggedByUserId String
+  loggedByName   String
+  playerAName    String
+  playerBName    String
+  archetypeA     String
+  archetypeB     String
+  winnerSide     String
+  gameType       String
+  notes          String?
+  formatCode     String
+  createdAt      DateTime @default(now())
+  group          Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  loggedBy       User     @relation("MatchLoggedBy", fields: [loggedByUserId], references: [id], onDelete: Cascade)
+}
+
+model MetaScenario {
+  id         String           @id @default(cuid())
+  groupId    String
+  name       String
+  createdBy  String
+  createdAt  DateTime         @default(now())
+  group      Group            @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  creator    User             @relation(fields: [createdBy], references: [id], onDelete: Cascade)
+  entries    MetaShareEntry[]
+}
+
+model MetaShareEntry {
+  id          String       @id @default(cuid())
+  scenarioId  String
+  archetypeId String
+  sharePct    Float
+  scenario    MetaScenario @relation(fields: [scenarioId], references: [id], onDelete: Cascade)
+  archetype   Archetype    @relation(fields: [archetypeId], references: [id], onDelete: Cascade)
+
+  @@unique([scenarioId, archetypeId])
+}
