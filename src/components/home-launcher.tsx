@@ -13,6 +13,8 @@ type GroupSummary = {
   createdAt: string | Date;
 };
 
+type DiscoverGroup = Pick<GroupSummary, "id" | "name" | "inviteCode" | "createdAt">;
+
 export default function HomeLauncher({
   groups,
   userName
@@ -21,8 +23,10 @@ export default function HomeLauncher({
   userName: string;
 }) {
   const router = useRouter();
-  const [createForm, setCreateForm] = useState({ name: "", password: "" });
-  const [joinForm, setJoinForm] = useState({ inviteCode: "", password: "" });
+  const [createForm, setCreateForm] = useState({ name: "", inviteCode: "" });
+  const [joinForm, setJoinForm] = useState({ inviteCode: "", groupNameQuery: "" });
+  const [searchResults, setSearchResults] = useState<DiscoverGroup[]>([]);
+  const [searching, setSearching] = useState(false);
   const [message, setMessage] = useState("");
 
   async function createGroup(e: React.FormEvent) {
@@ -41,15 +45,14 @@ export default function HomeLauncher({
     router.push(`/group/${data.id}`);
   }
 
-  async function joinGroup(e: React.FormEvent) {
-    e.preventDefault();
+  async function performJoin(inviteCodeRaw: string) {
     setMessage("");
+    const inviteCode = inviteCodeRaw.toUpperCase();
     const res = await fetch("/api/groups/join", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        inviteCode: joinForm.inviteCode.toUpperCase(),
-        password: joinForm.password
+        inviteCode
       })
     });
     const data = (await res.json()) as { id?: string; error?: string };
@@ -60,13 +63,35 @@ export default function HomeLauncher({
     router.push(`/group/${data.id}`);
   }
 
+  async function joinGroup(e: React.FormEvent, inviteCodeOverride?: string) {
+    e.preventDefault();
+    await performJoin(inviteCodeOverride ?? joinForm.inviteCode);
+  }
+
+  async function searchGroups(e: React.FormEvent) {
+    e.preventDefault();
+    setMessage("");
+    setSearching(true);
+    const res = await fetch(
+      `/api/groups/discover?query=${encodeURIComponent(joinForm.groupNameQuery.trim())}`
+    );
+    if (!res.ok) {
+      setSearching(false);
+      setMessage("Unable to search groups.");
+      return;
+    }
+    const data = (await res.json()) as DiscoverGroup[];
+    setSearchResults(data);
+    setSearching(false);
+  }
+
   return (
     <main className="container stack">
       <section className="card heroCard">
         <h1 className="title">Battle Frontier</h1>
         <p className="muted">
-          Welcome back {userName}. Create a testing group or join via invite code
-          + group password.
+          Welcome back {userName}. Create a testing group or join instantly via
+          group search.
         </p>
         <button className="primaryAction" onClick={() => signOut({ callbackUrl: "/" })}>
           Sign Out
@@ -84,11 +109,10 @@ export default function HomeLauncher({
           />
           <input
             required
-            type="password"
-            placeholder="Group password"
-            value={createForm.password}
+            placeholder="Invite code (e.g. DONPHAN)"
+            value={createForm.inviteCode}
             onChange={(e) =>
-              setCreateForm((v) => ({ ...v, password: e.target.value }))
+              setCreateForm((v) => ({ ...v, inviteCode: e.target.value.toUpperCase() }))
             }
           />
           <button className="actionBtn" type="submit">
@@ -96,28 +120,47 @@ export default function HomeLauncher({
           </button>
         </form>
 
-        <form className="stack" onSubmit={joinGroup}>
+        <form className="stack" onSubmit={searchGroups}>
           <h2>Join Group</h2>
           <input
             required
-            placeholder="Invite code"
-            value={joinForm.inviteCode}
+            placeholder="Search group name"
+            value={joinForm.groupNameQuery}
             onChange={(e) =>
-              setJoinForm((v) => ({ ...v, inviteCode: e.target.value.toUpperCase() }))
+              setJoinForm((v) => ({ ...v, groupNameQuery: e.target.value }))
             }
           />
-          <input
-            required
-            type="password"
-            placeholder="Group password"
-            value={joinForm.password}
-            onChange={(e) => setJoinForm((v) => ({ ...v, password: e.target.value }))}
-          />
           <button className="actionBtn" type="submit">
-            Join Group
+            {searching ? "Searching..." : "Search"}
           </button>
         </form>
       </section>
+
+      {searchResults.length > 0 ? (
+        <section className="card">
+          <h2>Search Results</h2>
+          <ul className="rows">
+            {searchResults.map((group) => (
+              <li className="row" key={group.id}>
+                <div>
+                  <strong>{group.name}</strong>
+                  <p className="mutedText">Invite code: {group.inviteCode}</p>
+                </div>
+                <button
+                  className="actionBtn"
+                  type="button"
+                  onClick={() => {
+                    setJoinForm((v) => ({ ...v, inviteCode: group.inviteCode }));
+                    void performJoin(group.inviteCode);
+                  }}
+                >
+                  Join
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       {message && (
         <section className="card">

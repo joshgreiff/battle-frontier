@@ -30,12 +30,17 @@ export const createMatchSchema = z.object({
 
 export const createGroupSchema = z.object({
   name: z.string().trim().min(2).max(80),
-  password: z.string().min(8).max(100)
+  inviteCode: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .min(4)
+    .max(24)
+    .regex(/^[A-Z0-9-]+$/)
 });
 
 export const joinGroupSchema = z.object({
-  inviteCode: z.string().trim().min(4).max(24),
-  password: z.string().min(8).max(100)
+  inviteCode: z.string().trim().min(4).max(24)
 });
 
 export const registerSchema = z.object({

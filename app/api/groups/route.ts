@@ -1,4 +1,3 @@
-import { hash } from "bcryptjs";
 import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 import { authOptions } from "@/lib/auth";
@@ -43,21 +42,22 @@ export async function POST(req: Request) {
     );
   }
 
-  const passwordHash = await hash(parsed.data.password, 10);
-
-  let inviteCode = generateInviteCode();
-  for (let attempts = 0; attempts < 5; attempts += 1) {
-    const exists = await prisma.group.findUnique({ where: { inviteCode } });
-    if (!exists) break;
-    inviteCode = generateInviteCode();
+  const inviteCode = parsed.data.inviteCode.toUpperCase();
+  const existingGroup = await prisma.group.findUnique({ where: { inviteCode } });
+  if (existingGroup) {
+    return NextResponse.json(
+      { error: "Invite code already in use. Try another code." },
+      { status: 409 }
+    );
   }
 
   const group = await prisma.group.create({
     data: {
       name: parsed.data.name,
       ownerId: session.user.id,
-      inviteCode,
-      passwordHash,
+      inviteCode: inviteCode || generateInviteCode(),
+      // Compatibility: DB still has non-null legacy group passwordHash.
+      passwordHash: "",
       members: {
         create: [{ userId: session.user.id, role: "owner" }]
       }

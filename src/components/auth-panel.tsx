@@ -83,8 +83,7 @@ export default function AuthPanel() {
       <section className="card heroCard">
         <h1 className="title">Battle Frontier</h1>
         <p className="muted">
-          Sign in to create or join your testing group with invite code +
-          password.
+          Sign in to create a group or join one instantly with an invite code.
         </p>
       </section>
 

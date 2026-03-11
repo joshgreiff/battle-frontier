@@ -27,7 +27,12 @@ export default function ThemeToggle() {
   }
 
   return (
-    <button className="themeToggle" type="button" onClick={toggleTheme}>
+    <button
+      className="themeToggle"
+      type="button"
+      onClick={toggleTheme}
+      suppressHydrationWarning
+    >
       {theme === "light" ? "Dark mode" : "Light mode"}
     </button>
   );

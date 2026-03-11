@@ -1,4 +1,3 @@
-import { compare } from "bcryptjs";
 import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 import { authOptions } from "@/lib/auth";
@@ -25,11 +24,6 @@ export async function POST(req: Request) {
   });
   if (!group) {
     return NextResponse.json({ error: "Group not found" }, { status: 404 });
-  }
-
-  const passwordOk = await compare(parsed.data.password, group.passwordHash);
-  if (!passwordOk) {
-    return NextResponse.json({ error: "Incorrect group password" }, { status: 403 });
   }
 
   await prisma.groupMember.upsert({
