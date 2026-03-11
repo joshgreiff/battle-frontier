@@ -23,6 +23,13 @@ export default function RootLayout({
             <p className="muted">
               Battle Frontier: prep smart, test together, and keep moving.
             </p>
+            <p className="muted">
+              Inspired by{" "}
+              <a href="https://trainingcourt.app" target="_blank" rel="noreferrer">
+                Training Court
+              </a>
+              .
+            </p>
           </div>
         </footer>
       </body>

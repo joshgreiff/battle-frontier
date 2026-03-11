@@ -13,7 +13,7 @@ type GroupSummary = {
   createdAt: string | Date;
 };
 
-type DiscoverGroup = Pick<GroupSummary, "id" | "name" | "inviteCode" | "createdAt">;
+type DiscoverGroup = Pick<GroupSummary, "id" | "name" | "createdAt">;
 
 export default function HomeLauncher({
   groups,
@@ -63,9 +63,8 @@ export default function HomeLauncher({
     router.push(`/group/${data.id}`);
   }
 
-  async function joinGroup(e: React.FormEvent, inviteCodeOverride?: string) {
-    e.preventDefault();
-    await performJoin(inviteCodeOverride ?? joinForm.inviteCode);
+  async function joinGroup() {
+    await performJoin(joinForm.inviteCode);
   }
 
   async function searchGroups(e: React.FormEvent) {
@@ -134,6 +133,17 @@ export default function HomeLauncher({
           <button className="actionBtn" type="submit">
             {searching ? "Searching..." : "Search"}
           </button>
+          <input
+            required
+            placeholder="Enter invite code"
+            value={joinForm.inviteCode}
+            onChange={(e) =>
+              setJoinForm((v) => ({ ...v, inviteCode: e.target.value.toUpperCase() }))
+            }
+          />
+          <button className="actionBtn" type="button" onClick={() => void joinGroup()}>
+            Join With Invite Code
+          </button>
         </form>
       </section>
 
@@ -145,17 +155,16 @@ export default function HomeLauncher({
               <li className="row" key={group.id}>
                 <div>
                   <strong>{group.name}</strong>
-                  <p className="mutedText">Invite code: {group.inviteCode}</p>
+                  <p className="mutedText">Use your group invite code to join.</p>
                 </div>
                 <button
-                  className="actionBtn"
+                  className="secondaryBtn"
                   type="button"
-                  onClick={() => {
-                    setJoinForm((v) => ({ ...v, inviteCode: group.inviteCode }));
-                    void performJoin(group.inviteCode);
-                  }}
+                  onClick={() =>
+                    setJoinForm((v) => ({ ...v, groupNameQuery: group.name }))
+                  }
                 >
-                  Join
+                  Select
                 </button>
               </li>
             ))}

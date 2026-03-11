@@ -20,7 +20,7 @@ export async function GET(req: Request) {
       name: { contains: query, mode: "insensitive" },
       members: { none: { userId: session.user.id } }
     },
-    select: { id: true, name: true, inviteCode: true, createdAt: true },
+    select: { id: true, name: true, createdAt: true },
     orderBy: { createdAt: "desc" },
     take: 8
   });
