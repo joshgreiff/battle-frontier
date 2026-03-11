@@ -26,6 +26,7 @@ export default function HomeLauncher({
   const [createForm, setCreateForm] = useState({ name: "", inviteCode: "" });
   const [joinForm, setJoinForm] = useState({ inviteCode: "", groupNameQuery: "" });
   const [searchResults, setSearchResults] = useState<DiscoverGroup[]>([]);
+  const [selectedGroupForJoin, setSelectedGroupForJoin] = useState<DiscoverGroup | null>(null);
   const [searching, setSearching] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -133,17 +134,6 @@ export default function HomeLauncher({
           <button className="actionBtn" type="submit">
             {searching ? "Searching..." : "Search"}
           </button>
-          <input
-            required
-            placeholder="Enter invite code"
-            value={joinForm.inviteCode}
-            onChange={(e) =>
-              setJoinForm((v) => ({ ...v, inviteCode: e.target.value.toUpperCase() }))
-            }
-          />
-          <button className="actionBtn" type="button" onClick={() => void joinGroup()}>
-            Join With Invite Code
-          </button>
         </form>
       </section>
 
@@ -160,15 +150,48 @@ export default function HomeLauncher({
                 <button
                   className="secondaryBtn"
                   type="button"
-                  onClick={() =>
-                    setJoinForm((v) => ({ ...v, groupNameQuery: group.name }))
-                  }
+                  onClick={() => {
+                    setSelectedGroupForJoin(group);
+                    setJoinForm((v) => ({ ...v, inviteCode: "" }));
+                    setMessage("");
+                  }}
                 >
-                  Select
+                  Join
                 </button>
               </li>
             ))}
           </ul>
+        </section>
+      ) : null}
+
+      {selectedGroupForJoin ? (
+        <section className="card">
+          <h2>Join {selectedGroupForJoin.name}</h2>
+          <div className="stack">
+            <input
+              required
+              placeholder="Enter invite code"
+              value={joinForm.inviteCode}
+              onChange={(e) =>
+                setJoinForm((v) => ({ ...v, inviteCode: e.target.value.toUpperCase() }))
+              }
+            />
+            <div className="inlineActions">
+              <button className="actionBtn" type="button" onClick={() => void joinGroup()}>
+                Join Group
+              </button>
+              <button
+                className="secondaryBtn"
+                type="button"
+                onClick={() => {
+                  setSelectedGroupForJoin(null);
+                  setJoinForm((v) => ({ ...v, inviteCode: "" }));
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
         </section>
       ) : null}
 
