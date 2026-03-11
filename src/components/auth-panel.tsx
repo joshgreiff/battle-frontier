@@ -4,6 +4,22 @@ import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+async function parseErrorResponse(res: Response): Promise<{
+  error?: string;
+  details?: { fieldErrors?: Record<string, string[] | undefined> };
+}> {
+  const text = await res.text();
+  if (!text) return {};
+  try {
+    return JSON.parse(text) as {
+      error?: string;
+      details?: { fieldErrors?: Record<string, string[] | undefined> };
+    };
+  } catch {
+    return { error: text };
+  }
+}
+
 export default function AuthPanel() {
   const router = useRouter();
   const [registerData, setRegisterData] = useState({
@@ -30,10 +46,7 @@ export default function AuthPanel() {
       body: JSON.stringify(payload)
     });
     if (!res.ok) {
-      const data = (await res.json()) as {
-        error?: string;
-        details?: { fieldErrors?: Record<string, string[] | undefined> };
-      };
+      const data = await parseErrorResponse(res);
       const passwordError = data.details?.fieldErrors?.password?.[0];
       const emailError = data.details?.fieldErrors?.email?.[0];
       const displayNameError = data.details?.fieldErrors?.displayName?.[0];
