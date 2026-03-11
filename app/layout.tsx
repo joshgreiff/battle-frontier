@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Analytics } from "@vercel/analytics/next";
 import AppSessionProvider from "@/components/session-provider";
 import ThemeToggle from "@/components/theme-toggle";
 import "./globals.css";
@@ -18,6 +19,7 @@ export default function RootLayout({
       <body>
         <ThemeToggle />
         <AppSessionProvider>{children}</AppSessionProvider>
+        <Analytics />
         <footer className="siteFooter">
           <div className="container">
             <p className="muted">
