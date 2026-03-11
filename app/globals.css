@@ -435,10 +435,11 @@ input[readOnly] {
   .sideNav {
     border-right: 0;
     border-bottom: 1px solid #e3e6ef;
+    padding: 0.8rem 0.65rem;
   }
 
   .gridForm {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: 1fr;
   }
 
   .statsGrid {
@@ -447,5 +448,35 @@ input[readOnly] {
 
   .splitCards {
     grid-template-columns: 1fr;
+  }
+
+  .contentPane {
+    padding: 0.8rem;
+  }
+
+  .row {
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+
+  .deckLabel {
+    flex-wrap: wrap;
+  }
+
+  .inlineActions {
+    flex-wrap: wrap;
+  }
+
+  .actionBtn,
+  .secondaryBtn {
+    width: 100%;
+    max-width: none;
+  }
+
+  .themeToggle {
+    top: 8px;
+    right: 8px;
+    padding: 0.4rem 0.55rem;
+    font-size: 0.84rem;
   }
 }
