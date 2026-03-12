@@ -28,6 +28,14 @@ export const createMatchSchema = z.object({
   formatCode: formatCodeSchema
 });
 
+export const updateMatchResultSchema = z.object({
+  groupId: z.string().cuid(),
+  matchId: z.string().cuid(),
+  archetypeA: z.string().trim().min(1).max(120),
+  archetypeB: z.string().trim().min(1).max(120),
+  winnerSide: z.enum(["A", "B"])
+});
+
 export const createGroupSchema = z.object({
   name: z.string().trim().min(2).max(80),
   inviteCode: z

@@ -21,6 +21,8 @@ type LogEntryMode = "manual" | "tcg_live";
 
 type LoggedGame = {
   id: string;
+  source: "manual" | "import";
+  loggedByUserId: string;
   loggedByName: string;
   playerAName: string;
   playerBName: string;
@@ -80,6 +82,25 @@ function pct(value: number): string {
   return `${(value * 100).toFixed(1)}%`;
 }
 
+function normalizeArchetypePiece(value: string): string {
+  const withoutCode = value
+    .trim()
+    .replace(/’/g, "'")
+    .replace(/^(\([^)]*\)\s*)+/g, "")
+    .replace(/\s+/g, " ");
+  return withoutCode.trim();
+}
+
+function normalizeArchetypeLabel(value: string): string {
+  const parts = value
+    .split("/")
+    .map((piece) => normalizeArchetypePiece(piece))
+    .filter(Boolean)
+    .slice(0, 2);
+  if (parts.length === 0) return "Other";
+  return parts.join(" / ");
+}
+
 async function parseErrorResponse(res: Response, fallback: string): Promise<string> {
   try {
     const data = (await res.json()) as { error?: string; details?: string };
@@ -113,12 +134,14 @@ export default function GroupDashboardClient({
   groupId,
   groupName,
   inviteCode,
+  currentUserId,
   userName,
   memberNames
 }: {
   groupId: string;
   groupName: string;
   inviteCode: string;
+  currentUserId: string;
   userName: string;
   memberNames: string[];
 }) {
@@ -126,7 +149,7 @@ export default function GroupDashboardClient({
   const [savedDecks, setSavedDecks] = useState<SavedDeck[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [activeTab, setActiveTab] = useState<"logs" | "stats" | "decks">("logs");
+  const [activeTab, setActiveTab] = useState<"logs" | "stats" | "decks" | "profile">("logs");
   const [logEntryMode, setLogEntryMode] = useState<LogEntryMode>("manual");
   const [selectedFormatId, setSelectedFormatId] = useState("SVI-ASC");
   const [newDeckPokemon1, setNewDeckPokemon1] = useState("");
@@ -160,6 +183,11 @@ export default function GroupDashboardClient({
   const [importHistory, setImportHistory] = useState<ImportHistoryItem[]>([]);
   const [parseMessage, setParseMessage] = useState("");
   const [selectedArchetype, setSelectedArchetype] = useState<string>("");
+  const [editingImportedMatchId, setEditingImportedMatchId] = useState<string | null>(null);
+  const [editImportedA, setEditImportedA] = useState("Other");
+  const [editImportedB, setEditImportedB] = useState("Other");
+  const [editWinnerSide, setEditWinnerSide] = useState<"A" | "B">("A");
+  const [savingImportedEdit, setSavingImportedEdit] = useState(false);
 
   const deckOptions = useMemo(() => {
     const seen = new Set<string>();
@@ -283,25 +311,34 @@ export default function GroupDashboardClient({
     : (deckOptions[0] ?? "Other");
 
   const filteredGames = games;
+  const normalizedGames = useMemo(
+    () =>
+      filteredGames.map((g) => ({
+        ...g,
+        archetypeA: normalizeArchetypeLabel(g.archetypeA),
+        archetypeB: normalizeArchetypeLabel(g.archetypeB)
+      })),
+    [filteredGames]
+  );
   const decksInUse = useMemo(() => {
     const set = new Set<string>();
     deckOptions.forEach((deck) => set.add(deck));
-    filteredGames.forEach((g) => {
+    normalizedGames.forEach((g) => {
       set.add(g.archetypeA);
       set.add(g.archetypeB);
     });
     return Array.from(set);
-  }, [deckOptions, filteredGames]);
+  }, [deckOptions, normalizedGames]);
 
   const matchupCells = useMemo(() => {
     return buildMatchupCells(
-      filteredGames.map((g) => ({
+      normalizedGames.map((g) => ({
         archetypeAId: g.archetypeA,
         archetypeBId: g.archetypeB,
         winnerSide: g.winnerSide
       }))
     );
-  }, [filteredGames]);
+  }, [normalizedGames]);
 
   const contributionLeaderboard = useMemo(() => {
     const counts = new Map<string, number>();
@@ -313,33 +350,9 @@ export default function GroupDashboardClient({
       .sort((a, b) => b.total - a.total);
   }, [filteredGames]);
 
-  const playerWinLeaderboard = useMemo(() => {
-    const stats = new Map<string, { games: number; wins: number }>();
-    filteredGames.forEach((g) => {
-      const a = stats.get(g.playerAName) ?? { games: 0, wins: 0 };
-      a.games += 1;
-      if (g.winnerSide === "A") a.wins += 1;
-      stats.set(g.playerAName, a);
-
-      const b = stats.get(g.playerBName) ?? { games: 0, wins: 0 };
-      b.games += 1;
-      if (g.winnerSide === "B") b.wins += 1;
-      stats.set(g.playerBName, b);
-    });
-
-    return Array.from(stats.entries())
-      .map(([name, s]) => ({
-        name,
-        games: s.games,
-        winRate: s.games ? s.wins / s.games : 0
-      }))
-      .filter((p) => p.games >= 10)
-      .sort((a, b) => b.winRate - a.winRate);
-  }, [filteredGames]);
-
   const archetypeOverview = useMemo(() => {
     const byDeck = new Map<string, { wins: number; losses: number; games: number }>();
-    for (const game of filteredGames) {
+    for (const game of normalizedGames) {
       const a = byDeck.get(game.archetypeA) ?? { wins: 0, losses: 0, games: 0 };
       a.games += 1;
       if (game.winnerSide === "A") a.wins += 1;
@@ -362,7 +375,12 @@ export default function GroupDashboardClient({
         winRate: stats.games ? stats.wins / stats.games : 0
       }))
       .sort((a, b) => b.games - a.games || b.winRate - a.winRate);
-  }, [filteredGames]);
+  }, [normalizedGames]);
+
+  const topArchetypeSummary = useMemo(
+    () => archetypeOverview.slice(0, 8),
+    [archetypeOverview]
+  );
 
   const activeSelectedArchetype = useMemo(() => {
     if (!selectedArchetype) return "";
@@ -379,7 +397,7 @@ export default function GroupDashboardClient({
   const activeSelectedArchetypeMatchups = useMemo(() => {
     if (!activeSelectedArchetype) return [];
     const byOpponent = new Map<string, { wins: number; losses: number; games: number }>();
-    for (const game of filteredGames) {
+    for (const game of normalizedGames) {
       let opponent: string | null = null;
       let win = false;
       if (game.archetypeA === activeSelectedArchetype) {
@@ -405,7 +423,7 @@ export default function GroupDashboardClient({
         winRate: stats.games ? stats.wins / stats.games : 0
       }))
       .sort((a, b) => b.games - a.games || b.winRate - a.winRate);
-  }, [filteredGames, activeSelectedArchetype]);
+  }, [normalizedGames, activeSelectedArchetype]);
 
   const [metaShares, setMetaShares] = useState<Record<string, number>>({
     "Charizard / Pidgeot": 28,
@@ -563,7 +581,7 @@ export default function GroupDashboardClient({
 
   const deckRows = useMemo(() => {
     const byDeck = new Map<string, { wins: number; losses: number; total: number }>();
-    for (const game of filteredGames) {
+    for (const game of normalizedGames) {
       const a = byDeck.get(game.archetypeA) ?? { wins: 0, losses: 0, total: 0 };
       a.total += 1;
       if (game.winnerSide === "A") a.wins += 1;
@@ -579,7 +597,12 @@ export default function GroupDashboardClient({
     return Array.from(byDeck.entries())
       .map(([deck, stats]) => ({ deck, ...stats }))
       .sort((a, b) => b.total - a.total);
-  }, [filteredGames]);
+  }, [normalizedGames]);
+
+  const myGames = useMemo(
+    () => normalizedGames.filter((g) => g.loggedByUserId === currentUserId).slice(0, 50),
+    [normalizedGames, currentUserId]
+  );
 
   function normalizePokemonInput(value: string): string {
     const trimmed = value.trim();
@@ -651,6 +674,38 @@ export default function GroupDashboardClient({
     }));
   }
 
+  function startImportedEdit(game: LoggedGame) {
+    setEditingImportedMatchId(game.id);
+    setEditImportedA(game.archetypeA);
+    setEditImportedB(game.archetypeB);
+    setEditWinnerSide(game.winnerSide);
+  }
+
+  async function saveImportedEdit(matchId: string) {
+    setSavingImportedEdit(true);
+    setError("");
+    const res = await fetch("/api/matches", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        groupId,
+        matchId,
+        archetypeA: editImportedA,
+        archetypeB: editImportedB,
+        winnerSide: editWinnerSide
+      })
+    });
+    if (!res.ok) {
+      setSavingImportedEdit(false);
+      setError(await parseErrorResponse(res, "Unable to update imported match archetypes."));
+      return;
+    }
+    const updated = (await res.json()) as LoggedGame;
+    setGames((current) => current.map((g) => (g.id === updated.id ? updated : g)));
+    setSavingImportedEdit(false);
+    setEditingImportedMatchId(null);
+  }
+
   return (
     <main className="appShell">
       <aside className="sideNav">
@@ -680,6 +735,13 @@ export default function GroupDashboardClient({
           >
             Decks
           </button>
+          <button
+            className={activeTab === "profile" ? "navBtn active" : "navBtn"}
+            onClick={() => setActiveTab("profile")}
+            type="button"
+          >
+            Profile
+          </button>
         </nav>
       </aside>
 
@@ -690,7 +752,9 @@ export default function GroupDashboardClient({
               ? "PTCG Logs"
               : activeTab === "stats"
                 ? "PTCG Stats"
-                : "Deck Editor"}
+                : activeTab === "decks"
+                  ? "Deck Editor"
+                  : "My Games"}
           </h1>
           <p className="mutedText">Track games and sharpen your event prep.</p>
           <p className="routeHint">Frontier Route: Group Testing Grounds</p>
@@ -1012,16 +1076,19 @@ export default function GroupDashboardClient({
             </article>
 
             <article className="panel">
-              <h2 className="panelTitle">Highest Win% (10+ Games)</h2>
-              {playerWinLeaderboard.length === 0 ? (
-                <p className="mutedText">No one has reached 10 games yet.</p>
+              <h2 className="panelTitle">Most Tested Archetypes</h2>
+              {topArchetypeSummary.length === 0 ? (
+                <p className="mutedText">No archetype data yet.</p>
               ) : (
                 <ul className="rows">
-                  {playerWinLeaderboard.map((entry) => (
-                    <li key={entry.name} className="row">
-                      <span>{entry.name}</span>
+                  {topArchetypeSummary.map((entry) => (
+                    <li key={entry.archetype} className="row">
+                      <span className="deckLabel">
+                        <ArchetypeIcons archetype={entry.archetype} />
+                        {entry.archetype}
+                      </span>
                       <strong>
-                        {pct(entry.winRate)} ({entry.games})
+                        {entry.games} games ({pct(entry.winRate)})
                       </strong>
                     </li>
                   ))}
@@ -1136,7 +1203,7 @@ export default function GroupDashboardClient({
               </ul>
             </article>
           </div>
-        ) : (
+        ) : activeTab === "decks" ? (
           <article className="panel">
             <h2 className="panelTitle">Manage Group Decks</h2>
             <div className="gridForm">
@@ -1214,6 +1281,81 @@ export default function GroupDashboardClient({
               Decks are saved per format so you can keep old rotation data. `Other` stays available
               with a Substitute icon.
             </p>
+          </article>
+        ) : (
+          <article className="panel">
+            <h2 className="panelTitle">My Logged Games</h2>
+            <p className="mutedText">
+              Edit your own matches here (winner + deck archetypes). This keeps shared logs view clean.
+            </p>
+            {myGames.length === 0 ? (
+              <p className="mutedText">You have not logged any games yet.</p>
+            ) : (
+              <ul className="rows">
+                {myGames.map((game) => (
+                  <li key={game.id} className="row">
+                    <div>
+                      <strong>
+                        {game.playerAName} vs {game.playerBName}
+                      </strong>
+                      {editingImportedMatchId === game.id ? (
+                        <div className="inlineActions">
+                          <select value={editImportedA} onChange={(e) => setEditImportedA(e.target.value)}>
+                            {decksInUse.map((deck) => (
+                              <option key={`${game.id}-a-${deck}`} value={deck}>
+                                {deckOptionLabel(deck)}
+                              </option>
+                            ))}
+                          </select>
+                          <select value={editImportedB} onChange={(e) => setEditImportedB(e.target.value)}>
+                            {decksInUse.map((deck) => (
+                              <option key={`${game.id}-b-${deck}`} value={deck}>
+                                {deckOptionLabel(deck)}
+                              </option>
+                            ))}
+                          </select>
+                          <select
+                            value={editWinnerSide}
+                            onChange={(e) => setEditWinnerSide(e.target.value as "A" | "B")}
+                          >
+                            <option value="A">Winner: {game.playerAName}</option>
+                            <option value="B">Winner: {game.playerBName}</option>
+                          </select>
+                        </div>
+                      ) : (
+                        <p className="mutedText">
+                          {game.archetypeA} vs {game.archetypeB} | Winner:{" "}
+                          {game.winnerSide === "A" ? game.playerAName : game.playerBName}
+                        </p>
+                      )}
+                    </div>
+                    {editingImportedMatchId === game.id ? (
+                      <div className="inlineActions">
+                        <button
+                          className="actionBtn"
+                          type="button"
+                          disabled={savingImportedEdit}
+                          onClick={() => void saveImportedEdit(game.id)}
+                        >
+                          {savingImportedEdit ? "Saving..." : "Save"}
+                        </button>
+                        <button
+                          className="secondaryBtn"
+                          type="button"
+                          onClick={() => setEditingImportedMatchId(null)}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    ) : (
+                      <button className="secondaryBtn" type="button" onClick={() => startImportedEdit(game)}>
+                        Edit Match
+                      </button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
           </article>
         )}
       </section>

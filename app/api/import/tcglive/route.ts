@@ -96,6 +96,14 @@ function parseFullTcgLiveLog(logText: string): ParsedLine | null {
       winner = normalizePlayerName(basicWin[1]);
       break;
     }
+
+    const conceded = line.match(/^(.+?) (?:conceded|forfeited)\./i);
+    if (conceded) {
+      const loser = normalizePlayerName(conceded[1]).toLowerCase();
+      if (playerA.toLowerCase() === loser) winner = playerB;
+      else if (playerB.toLowerCase() === loser) winner = playerA;
+      if (winner) break;
+    }
   }
   if (!winner) return null;
 

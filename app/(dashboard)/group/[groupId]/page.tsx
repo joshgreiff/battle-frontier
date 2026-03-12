@@ -40,6 +40,7 @@ export default async function GroupDashboardPage({ params }: GroupPageProps) {
       groupId={groupId}
       groupName={membership.group.name}
       inviteCode={membership.group.inviteCode}
+      currentUserId={session.user.id}
       userName={session.user.name ?? session.user.email ?? "Member"}
       memberNames={membership.group.members.map(
         (m) => m.user.displayName?.trim() || m.user.email
