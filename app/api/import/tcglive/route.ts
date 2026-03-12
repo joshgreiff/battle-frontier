@@ -97,6 +97,13 @@ function parseFullTcgLiveLog(logText: string): ParsedLine | null {
       break;
     }
 
+    // Handles lines like: "Opponent conceded. Deathfrog12345 wins."
+    const trailingWin = line.match(/(?:^|[.]\s+)(.+?) wins\.$/);
+    if (trailingWin) {
+      winner = normalizePlayerName(trailingWin[1]);
+      break;
+    }
+
     const conceded = line.match(/^(.+?) (?:conceded|forfeited)\./i);
     if (conceded) {
       const loser = normalizePlayerName(conceded[1]).toLowerCase();

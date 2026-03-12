@@ -17,13 +17,16 @@ type DiscoverGroup = Pick<GroupSummary, "id" | "name" | "createdAt">;
 
 export default function HomeLauncher({
   groups,
-  userName
+  userName,
+  tcgLiveUsername
 }: {
   groups: GroupSummary[];
   userName: string;
+  tcgLiveUsername: string;
 }) {
   const router = useRouter();
   const [displayName, setDisplayName] = useState(userName);
+  const [tcgLiveName, setTcgLiveName] = useState(tcgLiveUsername);
   const [savingProfile, setSavingProfile] = useState(false);
   const [createForm, setCreateForm] = useState({ name: "", inviteCode: "" });
   const [joinForm, setJoinForm] = useState({ inviteCode: "", groupNameQuery: "" });
@@ -39,7 +42,7 @@ export default function HomeLauncher({
     const res = await fetch("/api/profile", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ displayName })
+      body: JSON.stringify({ displayName, tcgLiveUsername: tcgLiveName })
     });
     const data = (await res.json()) as { error?: string };
     setSavingProfile(false);
@@ -47,7 +50,7 @@ export default function HomeLauncher({
       setMessage(data.error ?? "Unable to update display name.");
       return;
     }
-    setMessage("Display name updated.");
+    setMessage("Profile updated.");
     router.refresh();
   }
 
@@ -121,8 +124,13 @@ export default function HomeLauncher({
             value={displayName}
             onChange={(e) => setDisplayName(e.target.value)}
           />
+          <input
+            placeholder="TCG Live username"
+            value={tcgLiveName}
+            onChange={(e) => setTcgLiveName(e.target.value)}
+          />
           <button className="secondaryBtn" type="submit" disabled={savingProfile}>
-            {savingProfile ? "Saving..." : "Update Name"}
+            {savingProfile ? "Saving..." : "Update Profile"}
           </button>
         </form>
         <button className="primaryAction" onClick={() => signOut({ callbackUrl: "/" })}>

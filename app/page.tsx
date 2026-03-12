@@ -8,6 +8,11 @@ export default async function HomePage() {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) return <AuthPanel />;
 
+  const profile = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { displayName: true, tcgLiveUsername: true, email: true }
+  });
+
   const groups = await prisma.groupMember.findMany({
     where: { userId: session.user.id },
     include: {
@@ -21,7 +26,8 @@ export default async function HomePage() {
   return (
     <HomeLauncher
       groups={groups.map((membership) => membership.group)}
-      userName={session.user.name ?? session.user.email ?? "Trainer"}
+      userName={profile?.displayName ?? session.user.name ?? session.user.email ?? "Trainer"}
+      tcgLiveUsername={profile?.tcgLiveUsername ?? ""}
     />
   );
 }

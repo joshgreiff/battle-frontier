@@ -62,11 +62,17 @@ export const registerSchema = z.object({
     .transform((value) => (value && value.length > 0 ? value : undefined))
 });
 
-export const updateDisplayNameSchema = z.object({
+export const updateProfileSchema = z.object({
   displayName: z
     .string()
     .trim()
     .max(60)
+    .optional()
+    .transform((value) => (value && value.length > 0 ? value : undefined)),
+  tcgLiveUsername: z
+    .string()
+    .trim()
+    .max(40)
     .optional()
     .transform((value) => (value && value.length > 0 ? value : undefined))
 });

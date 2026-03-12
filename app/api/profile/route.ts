@@ -2,7 +2,7 @@ import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { updateDisplayNameSchema } from "@/lib/validation";
+import { updateProfileSchema } from "@/lib/validation";
 
 export async function PATCH(req: Request) {
   const session = await getServerSession(authOptions);
@@ -11,7 +11,7 @@ export async function PATCH(req: Request) {
   }
 
   const body = await req.json();
-  const parsed = updateDisplayNameSchema.safeParse(body);
+  const parsed = updateProfileSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json(
       { error: "Invalid profile payload", details: parsed.error.flatten() },
@@ -21,8 +21,11 @@ export async function PATCH(req: Request) {
 
   const updated = await prisma.user.update({
     where: { id: session.user.id },
-    data: { displayName: parsed.data.displayName ?? null },
-    select: { id: true, email: true, displayName: true }
+    data: {
+      displayName: parsed.data.displayName ?? null,
+      tcgLiveUsername: parsed.data.tcgLiveUsername ?? null
+    },
+    select: { id: true, email: true, displayName: true, tcgLiveUsername: true }
   });
 
   return NextResponse.json(updated);
