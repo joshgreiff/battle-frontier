@@ -87,6 +87,7 @@ function normalizeArchetypePiece(value: string): string {
     .trim()
     .replace(/’/g, "'")
     .replace(/^(\([^)]*\)\s*)+/g, "")
+    .replace(/^[a-z0-9 .-]+'s\s+/i, "")
     .replace(/\s+/g, " ");
   return withoutCode.trim();
 }

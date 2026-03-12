@@ -25,6 +25,7 @@ function normalizeName(raw: string): string {
     .trim()
     .toLowerCase()
     .replace(/\s*\([^)]*\)\s*$/g, "")
+    .replace(/^[a-z0-9 .-]+'s\s+/g, "")
     .replace(/’/g, "'")
     .replace(/\s+/g, " ");
 }
