@@ -159,6 +159,7 @@ export default function GroupDashboardClient({
   const [lastSavedImportId, setLastSavedImportId] = useState<string | null>(null);
   const [importHistory, setImportHistory] = useState<ImportHistoryItem[]>([]);
   const [parseMessage, setParseMessage] = useState("");
+  const [selectedArchetype, setSelectedArchetype] = useState<string>("");
 
   const deckOptions = useMemo(() => {
     const seen = new Set<string>();
@@ -335,6 +336,76 @@ export default function GroupDashboardClient({
       .filter((p) => p.games >= 10)
       .sort((a, b) => b.winRate - a.winRate);
   }, [filteredGames]);
+
+  const archetypeOverview = useMemo(() => {
+    const byDeck = new Map<string, { wins: number; losses: number; games: number }>();
+    for (const game of filteredGames) {
+      const a = byDeck.get(game.archetypeA) ?? { wins: 0, losses: 0, games: 0 };
+      a.games += 1;
+      if (game.winnerSide === "A") a.wins += 1;
+      else a.losses += 1;
+      byDeck.set(game.archetypeA, a);
+
+      const b = byDeck.get(game.archetypeB) ?? { wins: 0, losses: 0, games: 0 };
+      b.games += 1;
+      if (game.winnerSide === "B") b.wins += 1;
+      else b.losses += 1;
+      byDeck.set(game.archetypeB, b);
+    }
+
+    return Array.from(byDeck.entries())
+      .map(([archetype, stats]) => ({
+        archetype,
+        games: stats.games,
+        wins: stats.wins,
+        losses: stats.losses,
+        winRate: stats.games ? stats.wins / stats.games : 0
+      }))
+      .sort((a, b) => b.games - a.games || b.winRate - a.winRate);
+  }, [filteredGames]);
+
+  const activeSelectedArchetype = useMemo(() => {
+    if (!selectedArchetype) return "";
+    return archetypeOverview.some((entry) => entry.archetype === selectedArchetype)
+      ? selectedArchetype
+      : "";
+  }, [archetypeOverview, selectedArchetype]);
+
+  const activeSelectedArchetypeSummary = useMemo(() => {
+    if (!activeSelectedArchetype) return null;
+    return archetypeOverview.find((entry) => entry.archetype === activeSelectedArchetype) ?? null;
+  }, [activeSelectedArchetype, archetypeOverview]);
+
+  const activeSelectedArchetypeMatchups = useMemo(() => {
+    if (!activeSelectedArchetype) return [];
+    const byOpponent = new Map<string, { wins: number; losses: number; games: number }>();
+    for (const game of filteredGames) {
+      let opponent: string | null = null;
+      let win = false;
+      if (game.archetypeA === activeSelectedArchetype) {
+        opponent = game.archetypeB;
+        win = game.winnerSide === "A";
+      } else if (game.archetypeB === activeSelectedArchetype) {
+        opponent = game.archetypeA;
+        win = game.winnerSide === "B";
+      }
+      if (!opponent) continue;
+      const current = byOpponent.get(opponent) ?? { wins: 0, losses: 0, games: 0 };
+      current.games += 1;
+      if (win) current.wins += 1;
+      else current.losses += 1;
+      byOpponent.set(opponent, current);
+    }
+    return Array.from(byOpponent.entries())
+      .map(([opponent, stats]) => ({
+        opponent,
+        games: stats.games,
+        wins: stats.wins,
+        losses: stats.losses,
+        winRate: stats.games ? stats.wins / stats.games : 0
+      }))
+      .sort((a, b) => b.games - a.games || b.winRate - a.winRate);
+  }, [filteredGames, activeSelectedArchetype]);
 
   const [metaShares, setMetaShares] = useState<Record<string, number>>({
     "Charizard / Pidgeot": 28,
@@ -960,19 +1031,72 @@ export default function GroupDashboardClient({
 
             <article className="panel">
               <h2 className="panelTitle">Matchup Matrix</h2>
-              <ul className="rows">
-                {matchupCells.map((cell) => (
-                  <li key={`${cell.deckId}-${cell.oppId}`} className="row">
-                    <span className="deckLabel">
-                      <ArchetypeIcons archetype={cell.deckId} />
-                      {cell.deckId} vs {cell.oppId}
-                    </span>
-                    <strong>
-                      {pct(cell.rawWinRate)} ({cell.games})
-                    </strong>
-                  </li>
-                ))}
-              </ul>
+              {archetypeOverview.length === 0 ? (
+                <p className="mutedText">No matchup data yet.</p>
+              ) : activeSelectedArchetype ? (
+                <>
+                  <div className="inlineActions">
+                    <button
+                      className="secondaryBtn"
+                      type="button"
+                      onClick={() => setSelectedArchetype("")}
+                    >
+                      Back to Overall
+                    </button>
+                  </div>
+                  {activeSelectedArchetypeSummary ? (
+                    <p className="mutedText">
+                      {activeSelectedArchetypeSummary.archetype}: {pct(activeSelectedArchetypeSummary.winRate)} (
+                      {activeSelectedArchetypeSummary.wins}-{activeSelectedArchetypeSummary.losses},{" "}
+                      {activeSelectedArchetypeSummary.games})
+                    </p>
+                  ) : null}
+                  <h3 className="panelTitle">{activeSelectedArchetype} Matchups</h3>
+                  {activeSelectedArchetypeMatchups.length === 0 ? (
+                    <p className="mutedText">No matchup rows for this archetype yet.</p>
+                  ) : (
+                    <ul className="rows">
+                      {activeSelectedArchetypeMatchups.map((entry) => (
+                        <li key={`${activeSelectedArchetype}-${entry.opponent}`} className="row">
+                          <span className="deckLabel">
+                            <ArchetypeIcons archetype={entry.opponent} />
+                            vs {entry.opponent}
+                          </span>
+                          <strong>
+                            {pct(entry.winRate)} ({entry.wins}-{entry.losses}, {entry.games})
+                          </strong>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </>
+              ) : (
+                <>
+                  <p className="mutedText">
+                    Overall archetype performance sorted by games. Click one to drill into full
+                    matchup breakdown.
+                  </p>
+                  <ul className="rows matrixScrollable">
+                    {archetypeOverview.map((entry) => (
+                      <li key={entry.archetype} className="row">
+                        <button
+                          className="matrixPickBtn"
+                          type="button"
+                          onClick={() => setSelectedArchetype(entry.archetype)}
+                        >
+                          <span className="deckLabel">
+                            <ArchetypeIcons archetype={entry.archetype} />
+                            {entry.archetype}
+                          </span>
+                        </button>
+                        <strong>
+                          {pct(entry.winRate)} ({entry.wins}-{entry.losses}, {entry.games})
+                        </strong>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
             </article>
 
             <article className="panel">

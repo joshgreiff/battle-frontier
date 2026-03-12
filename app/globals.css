@@ -321,6 +321,40 @@ textarea {
   color: var(--text);
 }
 
+.matrixPickBtn {
+  width: auto;
+  max-width: none;
+  border-color: var(--border-strong);
+  background: var(--surface-soft);
+  color: var(--text);
+  padding: 0.45rem 0.6rem;
+}
+
+.matrixPickBtnActive {
+  border-color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 20%, var(--surface));
+}
+
+.matrixLayout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 0.8rem;
+  margin-top: 0.55rem;
+}
+
+.matrixPane {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.6rem;
+  background: color-mix(in srgb, var(--surface-soft) 65%, transparent);
+}
+
+.matrixScrollable {
+  max-height: 420px;
+  overflow-y: auto;
+  padding-right: 0.2rem;
+}
+
 .inlineActions {
   display: flex;
   gap: 0.6rem;
@@ -468,9 +502,18 @@ input[readOnly] {
   }
 
   .actionBtn,
-  .secondaryBtn {
+  .secondaryBtn,
+  .matrixPickBtn {
     width: 100%;
     max-width: none;
+  }
+
+  .matrixLayout {
+    grid-template-columns: 1fr;
+  }
+
+  .matrixScrollable {
+    max-height: 260px;
   }
 
   .themeToggle {

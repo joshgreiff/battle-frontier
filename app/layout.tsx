@@ -23,7 +23,7 @@ export default function RootLayout({
         <footer className="siteFooter">
           <div className="container">
             <p className="muted">
-              Battle Frontier: prep smart, test together, and keep moving.
+              Battle Frontier: Pokemon TCG testing for groups.
             </p>
             <p className="muted">
               Inspired by{" "}

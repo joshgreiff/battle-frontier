@@ -53,3 +53,12 @@ export const registerSchema = z.object({
     .optional()
     .transform((value) => (value && value.length > 0 ? value : undefined))
 });
+
+export const updateDisplayNameSchema = z.object({
+  displayName: z
+    .string()
+    .trim()
+    .max(60)
+    .optional()
+    .transform((value) => (value && value.length > 0 ? value : undefined))
+});

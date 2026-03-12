@@ -23,12 +23,33 @@ export default function HomeLauncher({
   userName: string;
 }) {
   const router = useRouter();
+  const [displayName, setDisplayName] = useState(userName);
+  const [savingProfile, setSavingProfile] = useState(false);
   const [createForm, setCreateForm] = useState({ name: "", inviteCode: "" });
   const [joinForm, setJoinForm] = useState({ inviteCode: "", groupNameQuery: "" });
   const [searchResults, setSearchResults] = useState<DiscoverGroup[]>([]);
   const [selectedGroupForJoin, setSelectedGroupForJoin] = useState<DiscoverGroup | null>(null);
   const [searching, setSearching] = useState(false);
   const [message, setMessage] = useState("");
+
+  async function updateDisplayName(e: React.FormEvent) {
+    e.preventDefault();
+    setMessage("");
+    setSavingProfile(true);
+    const res = await fetch("/api/profile", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ displayName })
+    });
+    const data = (await res.json()) as { error?: string };
+    setSavingProfile(false);
+    if (!res.ok) {
+      setMessage(data.error ?? "Unable to update display name.");
+      return;
+    }
+    setMessage("Display name updated.");
+    router.refresh();
+  }
 
   async function createGroup(e: React.FormEvent) {
     e.preventDefault();
@@ -90,10 +111,20 @@ export default function HomeLauncher({
       <section className="card heroCard">
         <h1 className="title">Battle Frontier</h1>
         <p className="muted">
-          Welcome back {userName}. Create a testing group or join instantly via
-          group search.
+          Welcome back {userName}. Create a testing group or find yours by name,
+          then join with your invite code.
         </p>
         <p className="routeHint">Adventure Mode: Regional Prep</p>
+        <form className="inlineActions" onSubmit={updateDisplayName}>
+          <input
+            placeholder="Display name"
+            value={displayName}
+            onChange={(e) => setDisplayName(e.target.value)}
+          />
+          <button className="secondaryBtn" type="submit" disabled={savingProfile}>
+            {savingProfile ? "Saving..." : "Update Name"}
+          </button>
+        </form>
         <button className="primaryAction" onClick={() => signOut({ callbackUrl: "/" })}>
           Sign Out
         </button>
