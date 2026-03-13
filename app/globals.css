@@ -350,9 +350,9 @@ textarea {
 }
 
 .matrixScrollable {
-  max-height: 420px;
-  overflow-y: auto;
-  padding-right: 0.2rem;
+  max-height: none;
+  overflow-y: visible;
+  padding-right: 0;
 }
 
 .inlineActions {

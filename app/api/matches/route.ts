@@ -5,13 +5,21 @@ import { prisma } from "@/lib/prisma";
 import { createMatchSchema, updateMatchResultSchema } from "@/lib/validation";
 
 function normalizeArchetypePiece(value: string): string {
-  return value
+  const cleaned = value
     .trim()
     .replace(/’/g, "'")
     .replace(/^(\([^)]*\)\s*)+/g, "")
     .replace(/^[a-z0-9 .-]+'s\s+/i, "")
     .replace(/\s+/g, " ")
     .trim();
+  const aliasKey = cleaned.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  const aliasToDeck: Record<string, string> = {
+    dreepy: "Dragapult",
+    dreep: "Dragapult",
+    drakloak: "Dragapult",
+    gimmighoul: "Gholdengo"
+  };
+  return aliasToDeck[aliasKey] ?? cleaned;
 }
 
 function normalizeArchetypeLabel(value: string): string {
@@ -20,8 +28,16 @@ function normalizeArchetypeLabel(value: string): string {
     .map((piece) => normalizeArchetypePiece(piece))
     .filter(Boolean)
     .slice(0, 2);
-  if (parts.length === 0) return "Other";
-  return parts.join(" / ");
+  const deduped: string[] = [];
+  const seen = new Set<string>();
+  for (const part of parts) {
+    const key = part.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(part);
+  }
+  if (deduped.length === 0) return "Other";
+  return deduped.join(" / ");
 }
 
 export async function GET(req: Request) {

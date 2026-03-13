@@ -89,7 +89,15 @@ function normalizeArchetypePiece(value: string): string {
     .replace(/^(\([^)]*\)\s*)+/g, "")
     .replace(/^[a-z0-9 .-]+'s\s+/i, "")
     .replace(/\s+/g, " ");
-  return withoutCode.trim();
+  const cleaned = withoutCode.trim();
+  const aliasKey = cleaned.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  const aliasToDeck: Record<string, string> = {
+    dreepy: "Dragapult",
+    dreep: "Dragapult",
+    drakloak: "Dragapult",
+    gimmighoul: "Gholdengo"
+  };
+  return aliasToDeck[aliasKey] ?? cleaned;
 }
 
 function normalizeArchetypeLabel(value: string): string {
@@ -98,8 +106,16 @@ function normalizeArchetypeLabel(value: string): string {
     .map((piece) => normalizeArchetypePiece(piece))
     .filter(Boolean)
     .slice(0, 2);
-  if (parts.length === 0) return "Other";
-  return parts.join(" / ");
+  const deduped: string[] = [];
+  const seen = new Set<string>();
+  for (const part of parts) {
+    const key = part.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(part);
+  }
+  if (deduped.length === 0) return "Other";
+  return deduped.join(" / ");
 }
 
 async function parseErrorResponse(res: Response, fallback: string): Promise<string> {
@@ -321,25 +337,43 @@ export default function GroupDashboardClient({
       })),
     [filteredGames]
   );
+  const knownDeckNameMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const deck of deckOptions) {
+      map.set(deck.trim().toLowerCase(), deck);
+    }
+    return map;
+  }, [deckOptions]);
+  const statsGames = useMemo(() => {
+    const toKnownDeckOrOther = (label: string): string => {
+      const normalized = normalizeArchetypeLabel(label);
+      return knownDeckNameMap.get(normalized.toLowerCase()) ?? "Other";
+    };
+    return normalizedGames.map((g) => ({
+      ...g,
+      archetypeA: toKnownDeckOrOther(g.archetypeA),
+      archetypeB: toKnownDeckOrOther(g.archetypeB)
+    }));
+  }, [normalizedGames, knownDeckNameMap]);
   const decksInUse = useMemo(() => {
     const set = new Set<string>();
     deckOptions.forEach((deck) => set.add(deck));
-    normalizedGames.forEach((g) => {
+    statsGames.forEach((g) => {
       set.add(g.archetypeA);
       set.add(g.archetypeB);
     });
     return Array.from(set);
-  }, [deckOptions, normalizedGames]);
+  }, [deckOptions, statsGames]);
 
   const matchupCells = useMemo(() => {
     return buildMatchupCells(
-      normalizedGames.map((g) => ({
+      statsGames.map((g) => ({
         archetypeAId: g.archetypeA,
         archetypeBId: g.archetypeB,
         winnerSide: g.winnerSide
       }))
     );
-  }, [normalizedGames]);
+  }, [statsGames]);
 
   const contributionLeaderboard = useMemo(() => {
     const counts = new Map<string, number>();
@@ -353,7 +387,7 @@ export default function GroupDashboardClient({
 
   const archetypeOverview = useMemo(() => {
     const byDeck = new Map<string, { wins: number; losses: number; games: number }>();
-    for (const game of normalizedGames) {
+    for (const game of statsGames) {
       const a = byDeck.get(game.archetypeA) ?? { wins: 0, losses: 0, games: 0 };
       a.games += 1;
       if (game.winnerSide === "A") a.wins += 1;
@@ -376,7 +410,7 @@ export default function GroupDashboardClient({
         winRate: stats.games ? stats.wins / stats.games : 0
       }))
       .sort((a, b) => b.games - a.games || b.winRate - a.winRate);
-  }, [normalizedGames]);
+  }, [statsGames]);
 
   const topArchetypeSummary = useMemo(
     () => archetypeOverview.slice(0, 8),
@@ -398,7 +432,7 @@ export default function GroupDashboardClient({
   const activeSelectedArchetypeMatchups = useMemo(() => {
     if (!activeSelectedArchetype) return [];
     const byOpponent = new Map<string, { wins: number; losses: number; games: number }>();
-    for (const game of normalizedGames) {
+    for (const game of statsGames) {
       let opponent: string | null = null;
       let win = false;
       if (game.archetypeA === activeSelectedArchetype) {
@@ -424,7 +458,7 @@ export default function GroupDashboardClient({
         winRate: stats.games ? stats.wins / stats.games : 0
       }))
       .sort((a, b) => b.games - a.games || b.winRate - a.winRate);
-  }, [normalizedGames, activeSelectedArchetype]);
+  }, [statsGames, activeSelectedArchetype]);
 
   const [metaShares, setMetaShares] = useState<Record<string, number>>({
     "Charizard / Pidgeot": 28,
@@ -677,8 +711,10 @@ export default function GroupDashboardClient({
 
   function startImportedEdit(game: LoggedGame) {
     setEditingImportedMatchId(game.id);
-    setEditImportedA(game.archetypeA);
-    setEditImportedB(game.archetypeB);
+    const normalizedA = normalizeArchetypeLabel(game.archetypeA);
+    const normalizedB = normalizeArchetypeLabel(game.archetypeB);
+    setEditImportedA(deckOptions.includes(normalizedA) ? normalizedA : "Other");
+    setEditImportedB(deckOptions.includes(normalizedB) ? normalizedB : "Other");
     setEditWinnerSide(game.winnerSide);
   }
 
@@ -1302,14 +1338,14 @@ export default function GroupDashboardClient({
                       {editingImportedMatchId === game.id ? (
                         <div className="inlineActions">
                           <select value={editImportedA} onChange={(e) => setEditImportedA(e.target.value)}>
-                            {decksInUse.map((deck) => (
+                            {deckOptions.map((deck) => (
                               <option key={`${game.id}-a-${deck}`} value={deck}>
                                 {deckOptionLabel(deck)}
                               </option>
                             ))}
                           </select>
                           <select value={editImportedB} onChange={(e) => setEditImportedB(e.target.value)}>
-                            {decksInUse.map((deck) => (
+                            {deckOptions.map((deck) => (
                               <option key={`${game.id}-b-${deck}`} value={deck}>
                                 {deckOptionLabel(deck)}
                               </option>
