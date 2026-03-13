@@ -570,16 +570,20 @@ export default function GroupDashboardClient({
     }
     setError("");
     setImportLoading(true);
+    const fallbackOverrideA = importFallbackDeckA.trim();
+    const fallbackOverrideB = importFallbackDeckB.trim();
+    const shouldOverrideA = fallbackOverrideA.length > 0 && fallbackOverrideA !== "Other";
+    const shouldOverrideB = fallbackOverrideB.length > 0 && fallbackOverrideB !== "Other";
     const createdRows: LoggedGame[] = [];
     for (const row of parsedImportRows) {
       const winnerSide = row.winner.toLowerCase() === row.playerB.toLowerCase() ? "B" : "A";
       const archetypeAForImport =
-        resolvedImportFallbackDeckA !== "Other"
-          ? resolvedImportFallbackDeckA
+        shouldOverrideA
+          ? fallbackOverrideA
           : (row.archetypeA || resolvedImportFallbackDeckA);
       const archetypeBForImport =
-        resolvedImportFallbackDeckB !== "Other"
-          ? resolvedImportFallbackDeckB
+        shouldOverrideB
+          ? fallbackOverrideB
           : (row.archetypeB || resolvedImportFallbackDeckB);
       const res = await fetch("/api/matches", {
         method: "POST",
