@@ -205,6 +205,10 @@ export default function GroupDashboardClient({
   const [editImportedB, setEditImportedB] = useState("Other");
   const [editWinnerSide, setEditWinnerSide] = useState<"A" | "B">("A");
   const [savingImportedEdit, setSavingImportedEdit] = useState(false);
+  const [profileDisplayName, setProfileDisplayName] = useState(userName);
+  const [profileTcgLiveUsername, setProfileTcgLiveUsername] = useState("");
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [profileMessage, setProfileMessage] = useState("");
 
   const deckOptions = useMemo(() => {
     const seen = new Set<string>();
@@ -267,6 +271,20 @@ export default function GroupDashboardClient({
     }
     loadDecks();
   }, [groupId, selectedFormatId]);
+
+  useEffect(() => {
+    async function loadProfile() {
+      const res = await fetch("/api/profile");
+      if (!res.ok) return;
+      const data = (await res.json()) as {
+        displayName?: string | null;
+        tcgLiveUsername?: string | null;
+      };
+      setProfileDisplayName(data.displayName?.trim() || userName);
+      setProfileTcgLiveUsername(data.tcgLiveUsername?.trim() || "");
+    }
+    loadProfile();
+  }, [userName]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -409,7 +427,11 @@ export default function GroupDashboardClient({
         losses: stats.losses,
         winRate: stats.games ? stats.wins / stats.games : 0
       }))
-      .sort((a, b) => b.games - a.games || b.winRate - a.winRate);
+      .sort((a, b) => {
+        if (a.archetype === "Other" && b.archetype !== "Other") return 1;
+        if (b.archetype === "Other" && a.archetype !== "Other") return -1;
+        return b.games - a.games || b.winRate - a.winRate;
+      });
   }, [statsGames]);
 
   const topArchetypeSummary = useMemo(
@@ -443,6 +465,8 @@ export default function GroupDashboardClient({
         win = game.winnerSide === "B";
       }
       if (!opponent) continue;
+      // Mirror rows are noisy in drilldown and can look misleading.
+      if (opponent === activeSelectedArchetype) continue;
       const current = byOpponent.get(opponent) ?? { wins: 0, losses: 0, games: 0 };
       current.games += 1;
       if (win) current.wins += 1;
@@ -741,6 +765,25 @@ export default function GroupDashboardClient({
     setGames((current) => current.map((g) => (g.id === updated.id ? updated : g)));
     setSavingImportedEdit(false);
     setEditingImportedMatchId(null);
+  }
+
+  async function saveProfile() {
+    setSavingProfile(true);
+    setProfileMessage("");
+    const res = await fetch("/api/profile", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        displayName: profileDisplayName,
+        tcgLiveUsername: profileTcgLiveUsername
+      })
+    });
+    setSavingProfile(false);
+    if (!res.ok) {
+      setProfileMessage(await parseErrorResponse(res, "Unable to update profile."));
+      return;
+    }
+    setProfileMessage("Profile updated.");
   }
 
   return (
@@ -1320,80 +1363,109 @@ export default function GroupDashboardClient({
             </p>
           </article>
         ) : (
-          <article className="panel">
-            <h2 className="panelTitle">My Logged Games</h2>
-            <p className="mutedText">
-              Edit your own matches here (winner + deck archetypes). This keeps shared logs view clean.
-            </p>
-            {myGames.length === 0 ? (
-              <p className="mutedText">You have not logged any games yet.</p>
-            ) : (
-              <ul className="rows">
-                {myGames.map((game) => (
-                  <li key={game.id} className="row">
-                    <div>
-                      <strong>
-                        {game.playerAName} vs {game.playerBName}
-                      </strong>
+          <>
+            <article className="panel">
+              <h2 className="panelTitle">Profile Settings</h2>
+              <div className="gridForm">
+                <label>
+                  Display name
+                  <input
+                    value={profileDisplayName}
+                    placeholder="Display name"
+                    onChange={(e) => setProfileDisplayName(e.target.value)}
+                  />
+                </label>
+                <label>
+                  TCG Live username
+                  <input
+                    value={profileTcgLiveUsername}
+                    placeholder="Enter your TCG Live username"
+                    onChange={(e) => setProfileTcgLiveUsername(e.target.value)}
+                  />
+                </label>
+              </div>
+              <div className="inlineActions">
+                <button className="actionBtn" type="button" disabled={savingProfile} onClick={saveProfile}>
+                  {savingProfile ? "Saving..." : "Update Profile"}
+                </button>
+              </div>
+              {profileMessage ? <p className="mutedText">{profileMessage}</p> : null}
+            </article>
+            <article className="panel">
+              <h2 className="panelTitle">My Logged Games</h2>
+              <p className="mutedText">
+                Edit your own matches here (winner + deck archetypes). This keeps shared logs view clean.
+              </p>
+              {myGames.length === 0 ? (
+                <p className="mutedText">You have not logged any games yet.</p>
+              ) : (
+                <ul className="rows">
+                  {myGames.map((game) => (
+                    <li key={game.id} className="row">
+                      <div>
+                        <strong>
+                          {game.playerAName} vs {game.playerBName}
+                        </strong>
+                        {editingImportedMatchId === game.id ? (
+                          <div className="inlineActions">
+                            <select value={editImportedA} onChange={(e) => setEditImportedA(e.target.value)}>
+                              {deckOptions.map((deck) => (
+                                <option key={`${game.id}-a-${deck}`} value={deck}>
+                                  {deckOptionLabel(deck)}
+                                </option>
+                              ))}
+                            </select>
+                            <select value={editImportedB} onChange={(e) => setEditImportedB(e.target.value)}>
+                              {deckOptions.map((deck) => (
+                                <option key={`${game.id}-b-${deck}`} value={deck}>
+                                  {deckOptionLabel(deck)}
+                                </option>
+                              ))}
+                            </select>
+                            <select
+                              value={editWinnerSide}
+                              onChange={(e) => setEditWinnerSide(e.target.value as "A" | "B")}
+                            >
+                              <option value="A">Winner: {game.playerAName}</option>
+                              <option value="B">Winner: {game.playerBName}</option>
+                            </select>
+                          </div>
+                        ) : (
+                          <p className="mutedText">
+                            {game.archetypeA} vs {game.archetypeB} | Winner:{" "}
+                            {game.winnerSide === "A" ? game.playerAName : game.playerBName}
+                          </p>
+                        )}
+                      </div>
                       {editingImportedMatchId === game.id ? (
                         <div className="inlineActions">
-                          <select value={editImportedA} onChange={(e) => setEditImportedA(e.target.value)}>
-                            {deckOptions.map((deck) => (
-                              <option key={`${game.id}-a-${deck}`} value={deck}>
-                                {deckOptionLabel(deck)}
-                              </option>
-                            ))}
-                          </select>
-                          <select value={editImportedB} onChange={(e) => setEditImportedB(e.target.value)}>
-                            {deckOptions.map((deck) => (
-                              <option key={`${game.id}-b-${deck}`} value={deck}>
-                                {deckOptionLabel(deck)}
-                              </option>
-                            ))}
-                          </select>
-                          <select
-                            value={editWinnerSide}
-                            onChange={(e) => setEditWinnerSide(e.target.value as "A" | "B")}
+                          <button
+                            className="actionBtn"
+                            type="button"
+                            disabled={savingImportedEdit}
+                            onClick={() => void saveImportedEdit(game.id)}
                           >
-                            <option value="A">Winner: {game.playerAName}</option>
-                            <option value="B">Winner: {game.playerBName}</option>
-                          </select>
+                            {savingImportedEdit ? "Saving..." : "Save"}
+                          </button>
+                          <button
+                            className="secondaryBtn"
+                            type="button"
+                            onClick={() => setEditingImportedMatchId(null)}
+                          >
+                            Cancel
+                          </button>
                         </div>
                       ) : (
-                        <p className="mutedText">
-                          {game.archetypeA} vs {game.archetypeB} | Winner:{" "}
-                          {game.winnerSide === "A" ? game.playerAName : game.playerBName}
-                        </p>
+                        <button className="secondaryBtn" type="button" onClick={() => startImportedEdit(game)}>
+                          Edit Match
+                        </button>
                       )}
-                    </div>
-                    {editingImportedMatchId === game.id ? (
-                      <div className="inlineActions">
-                        <button
-                          className="actionBtn"
-                          type="button"
-                          disabled={savingImportedEdit}
-                          onClick={() => void saveImportedEdit(game.id)}
-                        >
-                          {savingImportedEdit ? "Saving..." : "Save"}
-                        </button>
-                        <button
-                          className="secondaryBtn"
-                          type="button"
-                          onClick={() => setEditingImportedMatchId(null)}
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    ) : (
-                      <button className="secondaryBtn" type="button" onClick={() => startImportedEdit(game)}>
-                        Edit Match
-                      </button>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </article>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </article>
+          </>
         )}
       </section>
     </main>
