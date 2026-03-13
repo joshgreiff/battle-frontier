@@ -573,6 +573,14 @@ export default function GroupDashboardClient({
     const createdRows: LoggedGame[] = [];
     for (const row of parsedImportRows) {
       const winnerSide = row.winner.toLowerCase() === row.playerB.toLowerCase() ? "B" : "A";
+      const archetypeAForImport =
+        resolvedImportFallbackDeckA !== "Other"
+          ? resolvedImportFallbackDeckA
+          : (row.archetypeA || resolvedImportFallbackDeckA);
+      const archetypeBForImport =
+        resolvedImportFallbackDeckB !== "Other"
+          ? resolvedImportFallbackDeckB
+          : (row.archetypeB || resolvedImportFallbackDeckB);
       const res = await fetch("/api/matches", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -581,8 +589,8 @@ export default function GroupDashboardClient({
           source: "import",
           playerAName: row.playerA,
           playerBName: row.playerB,
-          archetypeA: row.archetypeA || resolvedImportFallbackDeckA,
-          archetypeB: row.archetypeB || resolvedImportFallbackDeckB,
+          archetypeA: archetypeAForImport,
+          archetypeB: archetypeBForImport,
           winnerSide,
           formatCode: row.formatCode || importFormatCode,
           gameType: "tcg_live_ladder",
